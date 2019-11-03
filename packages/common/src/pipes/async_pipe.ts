@@ -6,20 +6,20 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {ChangeDetectorRef, EventEmitter, Injectable, OnDestroy, Pipe, PipeTransform, WrappedValue, ɵisObservable, ɵisPromise, ɵlooseIdentical} from '@angular/core';
-import {Observable, SubscriptionLike} from 'rxjs';
-import {invalidPipeArgumentError} from './invalid_pipe_argument_error';
+import { ChangeDetectorRef, EventEmitter, Injectable, OnDestroy, Pipe, PipeTransform, WrappedValue, ɵisObservable, ɵisPromise, ɵlooseIdentical } from '@angular/core';
+import { Observable, SubscriptionLike } from 'rxjs';
+import { invalidPipeArgumentError } from './invalid_pipe_argument_error';
 
 interface SubscriptionStrategy {
-  createSubscription(async: Observable<any>|Promise<any>, updateLatestValue: any): SubscriptionLike
-      |Promise<any>;
-  dispose(subscription: SubscriptionLike|Promise<any>): void;
-  onDestroy(subscription: SubscriptionLike|Promise<any>): void;
+  createSubscription(async: Observable<any> | Promise<any>, updateLatestValue: any): SubscriptionLike
+    | Promise<any>;
+  dispose(subscription: SubscriptionLike | Promise<any>): void;
+  onDestroy(subscription: SubscriptionLike | Promise<any>): void;
 }
 
 class ObservableStrategy implements SubscriptionStrategy {
   createSubscription(async: Observable<any>, updateLatestValue: any): SubscriptionLike {
-    return async.subscribe({next: updateLatestValue, error: (e: any) => { throw e; }});
+    return async.subscribe({ next: updateLatestValue, error: (e: any) => { throw e; } });
   }
 
   dispose(subscription: SubscriptionLike): void { subscription.unsubscribe(); }
@@ -32,12 +32,13 @@ class PromiseStrategy implements SubscriptionStrategy {
     return async.then(updateLatestValue, e => { throw e; });
   }
 
-  dispose(subscription: Promise<any>): void {}
+  dispose(subscription: Promise<any>): void { }
 
-  onDestroy(subscription: Promise<any>): void {}
+  onDestroy(subscription: Promise<any>): void { }
 }
-
+/**如果是Promise,采用策略 */
 const _promiseStrategy = new PromiseStrategy();
+/**如果是Observable,采用策略 */
 const _observableStrategy = new ObservableStrategy();
 
 /**
@@ -68,17 +69,25 @@ const _observableStrategy = new ObservableStrategy();
  * @publicApi
  */
 @Injectable()
-@Pipe({name: 'async', pure: false})
+@Pipe({ name: 'async', pure: false })
 export class AsyncPipe implements OnDestroy, PipeTransform {
   private _latestValue: any = null;
   private _latestReturnedValue: any = null;
+  /**策略的定义 */
+  private _subscription: SubscriptionLike | Promise<any> | null = null;
+  /**保存的传入值,每次更改值后重置 */
+  private _obj: Observable<any> | Promise<any> | EventEmitter<any> | null = null;
+  private _strategy: SubscriptionStrategy = null!;
 
-  private _subscription: SubscriptionLike|Promise<any>|null = null;
-  private _obj: Observable<any>|Promise<any>|EventEmitter<any>|null = null;
-  private _strategy: SubscriptionStrategy = null !;
+  constructor(private _ref: ChangeDetectorRef) { }
 
-  constructor(private _ref: ChangeDetectorRef) {}
 
+  /**
+   * 存在订阅时,生命周期结束修改
+   *
+   * @author cyia
+   * @date 2019-11-03
+   */
   ngOnDestroy(): void {
     if (this._subscription) {
       this._dispose();
@@ -87,9 +96,9 @@ export class AsyncPipe implements OnDestroy, PipeTransform {
 
   transform<T>(obj: null): null;
   transform<T>(obj: undefined): undefined;
-  transform<T>(obj: Observable<T>|null|undefined): T|null;
-  transform<T>(obj: Promise<T>|null|undefined): T|null;
-  transform(obj: Observable<any>|Promise<any>|null|undefined): any {
+  transform<T>(obj: Observable<T> | null | undefined): T | null;
+  transform<T>(obj: Promise<T> | null | undefined): T | null;
+  transform(obj: Observable<any> | Promise<any> | null | undefined): any {
     if (!this._obj) {
       if (obj) {
         this._subscribe(obj);
@@ -97,28 +106,37 @@ export class AsyncPipe implements OnDestroy, PipeTransform {
       this._latestReturnedValue = this._latestValue;
       return this._latestValue;
     }
-
+    //doc 当变更后清除掉上一次的值,然后重新运行
     if (obj !== this._obj) {
       this._dispose();
       return this.transform(obj as any);
     }
-
+    //doc 判断值是否相等(排除nan==nan)
     if (ɵlooseIdentical(this._latestValue, this._latestReturnedValue)) {
       return this._latestReturnedValue;
     }
 
     this._latestReturnedValue = this._latestValue;
+    //todo 为什么要创建一个包裹类包裹?
     return WrappedValue.wrap(this._latestValue);
   }
 
-  private _subscribe(obj: Observable<any>|Promise<any>|EventEmitter<any>): void {
+  /**
+   * 初始化,订阅传入值
+   *
+   * @author cyia
+   * @date 2019-11-03
+   * @private
+   * @param obj
+   */
+  private _subscribe(obj: Observable<any> | Promise<any> | EventEmitter<any>): void {
     this._obj = obj;
     this._strategy = this._selectStrategy(obj);
+    //doc 当值变更时,调用_updateLatestValue,回调值传入其中
     this._subscription = this._strategy.createSubscription(
-        obj, (value: Object) => this._updateLatestValue(obj, value));
+      obj, (value: Object) => this._updateLatestValue(obj, value));
   }
-
-  private _selectStrategy(obj: Observable<any>|Promise<any>|EventEmitter<any>): any {
+  private _selectStrategy(obj: Observable<any> | Promise<any> | EventEmitter<any>): any {
     if (ɵisPromise(obj)) {
       return _promiseStrategy;
     }
@@ -131,7 +149,7 @@ export class AsyncPipe implements OnDestroy, PipeTransform {
   }
 
   private _dispose(): void {
-    this._strategy.dispose(this._subscription !);
+    this._strategy.dispose(this._subscription!);
     this._latestValue = null;
     this._latestReturnedValue = null;
     this._subscription = null;
@@ -139,6 +157,7 @@ export class AsyncPipe implements OnDestroy, PipeTransform {
   }
 
   private _updateLatestValue(async: any, value: Object): void {
+    //doc 变更对象的确是自身时触发,不清楚为什么要这么搞,是因为变更对象有可能变化?
     if (async === this._obj) {
       this._latestValue = value;
       this._ref.markForCheck();
