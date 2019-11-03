@@ -8,7 +8,7 @@
   "license": "MIT",
   "engines": {
     "node": ">=10.9.0 <11.0.0",
-    "yarn": ">=1.17.3 <=1.18.0"
+    "yarn": ">=1.17.3 <=1.180.0"
   },
   "repository": {
     "type": "git",
@@ -22,7 +22,7 @@
     "postinstall": "yarn update-webdriver && node --preserve-symlinks --preserve-symlinks-main ./tools/postinstall-patches.js",
     "update-webdriver": "webdriver-manager update --gecko false $CI_CHROMEDRIVER_VERSION_ARG",
     "check-env": "gulp check-env",
-    "commitmsg": "node ./scripts/git/commit-msg.js",
+    "xcommitmsg": "node ./scripts/git/commit-msg.js",
     "test-ivy-aot": "bazel test --define=compile=aot --build_tag_filters=-no-ivy-aot,-fixme-ivy-aot --test_tag_filters=-no-ivy-aot,-fixme-ivy-aot",
     "test-fixme-ivy-aot": "bazel test --define=compile=aot --build_tag_filters=-no-ivy-aot --test_tag_filters=-no-ivy-aot",
     "list-fixme-ivy-targets": "bazel query --output=label 'attr(\"tags\", \"\\[.*fixme-ivy.*\\]\", //...) except kind(\"sh_binary\", //...) except kind(\"devmode_js_sources\", //...)' | sort",
@@ -152,7 +152,6 @@
     "madge": "0.5.0",
     "mutation-observer": "^1.0.3",
     "rewire": "2.5.2",
-    "sauce-connect": "https://saucelabs.com/downloads/sc-4.5.1-linux.tar.gz",
     "semver": "5.4.1",
     "tslint-eslint-rules": "4.1.1",
     "tslint-no-toplevel-property-access": "0.0.2",
