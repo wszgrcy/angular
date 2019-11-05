@@ -6,15 +6,15 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {ChangeDetectionStrategy} from '../change_detection/constants';
-import {Provider} from '../di';
-import {Type} from '../interface/type';
-import {compileComponent as render3CompileComponent, compileDirective as render3CompileDirective} from '../render3/jit/directive';
-import {compilePipe as render3CompilePipe} from '../render3/jit/pipe';
-import {TypeDecorator, makeDecorator, makePropDecorator} from '../util/decorators';
-import {noop} from '../util/noop';
+import { ChangeDetectionStrategy } from '../change_detection/constants';
+import { Provider } from '../di';
+import { Type } from '../interface/type';
+import { compileComponent as render3CompileComponent, compileDirective as render3CompileDirective } from '../render3/jit/directive';
+import { compilePipe as render3CompilePipe } from '../render3/jit/pipe';
+import { TypeDecorator, makeDecorator, makePropDecorator } from '../util/decorators';
+import { noop } from '../util/noop';
 
-import {ViewEncapsulation} from './view';
+import { ViewEncapsulation } from './view';
 
 
 
@@ -73,7 +73,7 @@ export interface DirectiveDecorator {
   /**
    * See the `Directive` decorator.
    */
-  new (obj: Directive): Directive;
+  new(obj: Directive): Directive;
 }
 
 /**
@@ -255,7 +255,7 @@ export interface Directive {
    *
    * @Annotation
    */
-  queries?: {[key: string]: any};
+  queries?: { [key: string]: any };
 
   /**
    * Maps class properties to host element bindings for properties,
@@ -279,7 +279,7 @@ export interface Directive {
    * event. A handler method can refer to the `$event` local variable.
    *
    */
-  host?: {[key: string]: string};
+  host?: { [key: string]: string };
 
   /**
    * If true, this directive/component will be skipped by the AOT compiler and so will always be
@@ -296,8 +296,8 @@ export interface Directive {
  * @publicApi
  */
 export const Directive: DirectiveDecorator = makeDecorator(
-    'Directive', (dir: Directive = {}) => dir, undefined, undefined,
-    (type: Type<any>, meta: Directive) => SWITCH_COMPILE_DIRECTIVE(type, meta));
+  'Directive', (dir: Directive = {}) => dir, undefined, undefined,
+  (type: Type<any>, meta: Directive) => SWITCH_COMPILE_DIRECTIVE(type, meta));
 
 /**
  * Component decorator interface
@@ -445,7 +445,7 @@ export interface ComponentDecorator {
   /**
    * See the `Component` decorator.
    */
-  new (obj: Component): Component;
+  new(obj: Component): Component;
 }
 
 /**
@@ -543,7 +543,7 @@ export interface Component extends Directive {
    * Angular creates a {@link ComponentFactory} and stores it in the
    * {@link ComponentFactoryResolver}.
    */
-  entryComponents?: Array<Type<any>|any[]>;
+  entryComponents?: Array<Type<any> | any[]>;
 
   /**
    * True to preserve or false to remove potentially superfluous whitespace characters
@@ -561,9 +561,9 @@ export interface Component extends Directive {
  * @publicApi
  */
 export const Component: ComponentDecorator = makeDecorator(
-    'Component', (c: Component = {}) => ({changeDetection: ChangeDetectionStrategy.Default, ...c}),
-    Directive, undefined,
-    (type: Type<any>, meta: Component) => SWITCH_COMPILE_COMPONENT(type, meta));
+  'Component', (c: Component = {}) => ({ changeDetection: ChangeDetectionStrategy.Default, ...c }),
+  Directive, undefined,
+  (type: Type<any>, meta: Component) => SWITCH_COMPILE_COMPONENT(type, meta));
 
 /**
  * Type of the Pipe decorator / constructor function.
@@ -597,7 +597,7 @@ export interface PipeDecorator {
   /**
    * See the `Pipe` decorator.
    */
-  new (obj: Pipe): Pipe;
+  new(obj: Pipe): Pipe;
 }
 
 /**
@@ -631,9 +631,9 @@ export interface Pipe {
  * @publicApi
  */
 export const Pipe: PipeDecorator = makeDecorator(
-    'Pipe', (p: Pipe) => ({pure: true, ...p}), undefined, undefined,
-    (type: Type<any>, meta: Pipe) => SWITCH_COMPILE_PIPE(type, meta));
-
+  'Pipe', (p: Pipe) => ({ pure: true, ...p }), undefined, undefined,
+  (type: Type<any>, meta: Pipe) => SWITCH_COMPILE_PIPE(type, meta));
+console.warn('猜测,这个是管道的装饰器', Pipe)
 
 /**
  * @publicApi
@@ -685,7 +685,7 @@ export interface InputDecorator {
   * @see [Input and Output properties](guide/template-syntax#input-and-output-properties)
   */
   (bindingPropertyName?: string): any;
-  new (bindingPropertyName?: string): any;
+  new(bindingPropertyName?: string): any;
 }
 
 /**
@@ -705,7 +705,7 @@ export interface Input {
  * @publicApi
  */
 export const Input: InputDecorator =
-    makePropDecorator('Input', (bindingPropertyName?: string) => ({bindingPropertyName}));
+  makePropDecorator('Input', (bindingPropertyName?: string) => ({ bindingPropertyName }));
 
 /**
  * Type of the Output decorator / constructor function.
@@ -730,7 +730,7 @@ export interface OutputDecorator {
   *
   */
   (bindingPropertyName?: string): any;
-  new (bindingPropertyName?: string): any;
+  new(bindingPropertyName?: string): any;
 }
 
 /**
@@ -750,7 +750,7 @@ export interface Output {
  * @publicApi
  */
 export const Output: OutputDecorator =
-    makePropDecorator('Output', (bindingPropertyName?: string) => ({bindingPropertyName}));
+  makePropDecorator('Output', (bindingPropertyName?: string) => ({ bindingPropertyName }));
 
 
 
@@ -790,7 +790,7 @@ export interface HostBindingDecorator {
    *
    */
   (hostPropertyName?: string): any;
-  new (hostPropertyName?: string): any;
+  new(hostPropertyName?: string): any;
 }
 
 /**
@@ -810,7 +810,7 @@ export interface HostBinding {
  * @publicApi
  */
 export const HostBinding: HostBindingDecorator =
-    makePropDecorator('HostBinding', (hostPropertyName?: string) => ({hostPropertyName}));
+  makePropDecorator('HostBinding', (hostPropertyName?: string) => ({ hostPropertyName }));
 
 
 /**
@@ -824,7 +824,7 @@ export interface HostListenerDecorator {
    * and provides a handler method to run when that event occurs.
    */
   (eventName: string, args?: string[]): any;
-  new (eventName: string, args?: string[]): any;
+  new(eventName: string, args?: string[]): any;
 }
 
 /**
@@ -877,7 +877,7 @@ export interface HostListener {
  * @publicApi
  */
 export const HostListener: HostListenerDecorator =
-    makePropDecorator('HostListener', (eventName?: string, args?: string[]) => ({eventName, args}));
+  makePropDecorator('HostListener', (eventName?: string, args?: string[]) => ({ eventName, args }));
 
 
 

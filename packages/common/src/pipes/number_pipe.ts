@@ -14,7 +14,7 @@ import {invalidPipeArgumentError} from './invalid_pipe_argument_error';
 /**
  * @ngModule CommonModule
  * @description
- *
+ * !需要调试查看
  * Transforms a number into a string,
  * formatted according to locale rules that determine group sizing and
  * separator, decimal-point character, and other locale-specific
@@ -232,9 +232,10 @@ function isEmpty(value: any): boolean {
 
 /**
  * Transforms a string into a number (if needed).
+ * 转换一个字符串为数组
  */
 function strToNumber(value: number | string): number {
-  // Convert strings to numbers
+  // Convert strings to numbers 判断确实是一个纯数字,
   if (typeof value === 'string' && !isNaN(Number(value) - parseFloat(value))) {
     return Number(value);
   }

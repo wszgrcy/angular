@@ -6,10 +6,11 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {Directive, EmbeddedViewRef, Input, TemplateRef, ViewContainerRef, ɵstringify as stringify} from '@angular/core';
+import { Directive, EmbeddedViewRef, Input, TemplateRef, ViewContainerRef, ɵstringify as stringify } from '@angular/core';
 
 
 /**
+ * 默认是ngif,当有then时,优先then ?
  * A structural directive that conditionally includes a template based on the value of
  * an expression coerced to Boolean.
  * When the expression evaluates to true, Angular renders the template
@@ -144,20 +145,21 @@ import {Directive, EmbeddedViewRef, Input, TemplateRef, ViewContainerRef, ɵstri
  * The presence of the implicit template object has implications for the nesting of
  * structural directives. For more on this subject, see
  * [Structural Directives](https://angular.io/guide/structural-directives#one-per-element).
- *
+ * 
  * @ngModule CommonModule
  * @publicApi
  */
-@Directive({selector: '[ngIf]'})
+@Directive({ selector: '[ngIf]' })
 export class NgIf {
   private _context: NgIfContext = new NgIfContext();
-  private _thenTemplateRef: TemplateRef<NgIfContext>|null = null;
-  private _elseTemplateRef: TemplateRef<NgIfContext>|null = null;
-  private _thenViewRef: EmbeddedViewRef<NgIfContext>|null = null;
-  private _elseViewRef: EmbeddedViewRef<NgIfContext>|null = null;
+  private _thenTemplateRef: TemplateRef<NgIfContext> | null = null;
+  private _elseTemplateRef: TemplateRef<NgIfContext> | null = null;
+  private _thenViewRef: EmbeddedViewRef<NgIfContext> | null = null;
+  private _elseViewRef: EmbeddedViewRef<NgIfContext> | null = null;
 
   constructor(private _viewContainer: ViewContainerRef, templateRef: TemplateRef<NgIfContext>) {
     this._thenTemplateRef = templateRef;
+    console.log('传入的应该是自身的模板引用,赋值给this._thenTemplateRef', templateRef)
   }
 
   /**
@@ -165,6 +167,7 @@ export class NgIf {
    */
   @Input()
   set ngIf(condition: any) {
+    //?上下文的默认参数和ngif都相等?为条件?理论上可以通过let-获取到?
     this._context.$implicit = this._context.ngIf = condition;
     this._updateView();
   }
@@ -173,7 +176,7 @@ export class NgIf {
    * A template to show if the condition expression evaluates to true.
    */
   @Input()
-  set ngIfThen(templateRef: TemplateRef<NgIfContext>|null) {
+  set ngIfThen(templateRef: TemplateRef<NgIfContext> | null) {
     assertTemplate('ngIfThen', templateRef);
     this._thenTemplateRef = templateRef;
     this._thenViewRef = null;  // clear previous view if any.
@@ -184,7 +187,7 @@ export class NgIf {
    * A template to show if the condition expression evaluates to false.
    */
   @Input()
-  set ngIfElse(templateRef: TemplateRef<NgIfContext>|null) {
+  set ngIfElse(templateRef: TemplateRef<NgIfContext> | null) {
     assertTemplate('ngIfElse', templateRef);
     this._elseTemplateRef = templateRef;
     this._elseViewRef = null;  // clear previous view if any.
@@ -192,13 +195,15 @@ export class NgIf {
   }
 
   private _updateView() {
+    //doc 如果ngif=true
     if (this._context.$implicit) {
+      //doc 如果还没有创建then视图,可以进行创建
       if (!this._thenViewRef) {
         this._viewContainer.clear();
         this._elseViewRef = null;
         if (this._thenTemplateRef) {
           this._thenViewRef =
-              this._viewContainer.createEmbeddedView(this._thenTemplateRef, this._context);
+            this._viewContainer.createEmbeddedView(this._thenTemplateRef, this._context);
         }
       }
     } else {
@@ -207,7 +212,7 @@ export class NgIf {
         this._thenViewRef = null;
         if (this._elseTemplateRef) {
           this._elseViewRef =
-              this._viewContainer.createEmbeddedView(this._elseTemplateRef, this._context);
+            this._viewContainer.createEmbeddedView(this._elseTemplateRef, this._context);
         }
       }
     }
@@ -235,7 +240,13 @@ export class NgIfContext {
   public ngIf: any = null;
 }
 
-function assertTemplate(property: string, templateRef: TemplateRef<any>| null): void {
+/**
+ * 断言是不是模板引用对象
+ *
+ * @param {string} property
+ * @param {(TemplateRef<any> | null)} templateRef
+ */
+function assertTemplate(property: string, templateRef: TemplateRef<any> | null): void {
   const isTemplateRefOrNull = !!(!templateRef || templateRef.createEmbeddedView);
   if (!isTemplateRefOrNull) {
     throw new Error(`${property} must be a TemplateRef, but received '${stringify(templateRef)}'.`);

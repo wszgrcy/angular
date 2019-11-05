@@ -428,7 +428,7 @@ export function getLocaleNumberSymbol(locale: string, symbol: NumberSymbol): str
  * | % | Marks a percent format. The % symbol may change position, but must be retained. |
  * | E | Marks a scientific format. The E symbol may change position, but must be retained. |
  * | ' | Special characters used as literal characters are quoted with ASCII single quotes. |
- *
+ * 返回本地区的相关数字格式
  * @param locale A locale code for the locale format rules to use.
  * @param type The type of numeric value to be formatted (such as `Decimal` or `Currency`.)
  * @returns The localized format string.

@@ -26,7 +26,8 @@ export interface KeyValue<K, V> {
 /**
  * @ngModule CommonModule
  * @description
- *
+ * 接受Map或者对象
+ * ! 需要依赖注入相关知识
  * Transforms Object or Map into an array of key value pairs.
  *
  * The output array will be ordered by keys.

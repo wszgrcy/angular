@@ -6,15 +6,15 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {Directive, DoCheck, EmbeddedViewRef, Input, IterableChangeRecord, IterableChanges, IterableDiffer, IterableDiffers, NgIterable, TemplateRef, TrackByFunction, ViewContainerRef, forwardRef, isDevMode} from '@angular/core';
+import { Directive, DoCheck, EmbeddedViewRef, Input, IterableChangeRecord, IterableChanges, IterableDiffer, IterableDiffers, NgIterable, TemplateRef, TrackByFunction, ViewContainerRef, forwardRef, isDevMode } from '@angular/core';
 
 /**
  * @publicApi
  */
 export class NgForOfContext<T> {
   constructor(
-      public $implicit: T, public ngForOf: NgIterable<T>, public index: number,
-      public count: number) {}
+    public $implicit: T, public ngForOf: NgIterable<T>, public index: number,
+    public count: number) { }
 
   get first(): boolean { return this.index === 0; }
 
@@ -26,6 +26,7 @@ export class NgForOfContext<T> {
 }
 
 /**
+ * ! 需要代码调试
  * A [structural directive](guide/structural-directives) that renders
  * a template for each item in a collection.
  * The directive is placed on an element, which becomes the parent
@@ -122,7 +123,7 @@ export class NgForOfContext<T> {
  * @ngModule CommonModule
  * @publicApi
  */
-@Directive({selector: '[ngFor][ngForOf]'})
+@Directive({ selector: '[ngFor][ngForOf]' })
 export class NgForOf<T> implements DoCheck {
   /**
    * The value of the iterable expression, which can be used as a
@@ -130,6 +131,7 @@ export class NgForOf<T> implements DoCheck {
    */
   @Input()
   set ngForOf(ngForOf: NgIterable<T>) {
+    console.log('ngForOf输入值', ngForOf)
     this._ngForOf = ngForOf;
     this._ngForOfDirty = true;
   }
@@ -156,8 +158,8 @@ export class NgForOf<T> implements DoCheck {
       // TODO(vicb): use a log service once there is a public one available
       if (<any>console && <any>console.warn) {
         console.warn(
-            `trackBy must be a function, but received ${JSON.stringify(fn)}. ` +
-            `See https://angular.io/docs/ts/latest/api/common/index/NgFor-directive.html#!#change-propagation for more information.`);
+          `trackBy must be a function, but received ${JSON.stringify(fn)}. ` +
+          `See https://angular.io/docs/ts/latest/api/common/index/NgFor-directive.html#!#change-propagation for more information.`);
       }
     }
     this._trackByFn = fn;
@@ -168,13 +170,13 @@ export class NgForOf<T> implements DoCheck {
   // TODO(issue/24571): remove '!'.
   private _ngForOf !: NgIterable<T>;
   private _ngForOfDirty: boolean = true;
-  private _differ: IterableDiffer<T>|null = null;
+  private _differ: IterableDiffer<T> | null = null;
   // TODO(issue/24571): remove '!'.
   private _trackByFn !: TrackByFunction<T>;
 
   constructor(
-      private _viewContainer: ViewContainerRef, private _template: TemplateRef<NgForOfContext<T>>,
-      private _differs: IterableDiffers) {}
+    private _viewContainer: ViewContainerRef, private _template: TemplateRef<NgForOfContext<T>>,
+    private _differs: IterableDiffers) { }
 
   /**
    * A reference to the template that is stamped out for each item in the iterable.
@@ -182,6 +184,7 @@ export class NgForOf<T> implements DoCheck {
    */
   @Input()
   set ngForTemplate(value: TemplateRef<NgForOfContext<T>>) {
+    console.log('应该是指令附加部分的标签', value)
     // TODO(TS2.1): make TemplateRef<Partial<NgForRowOf<T>>> once we move to TS v2.1
     // The current type is too restrictive; a template that just uses index, for example,
     // should be acceptable.
@@ -192,22 +195,27 @@ export class NgForOf<T> implements DoCheck {
 
   /**
    * Applies the changes when needed.
+   * 此钩子在每一次变更监测时,都会触发
    */
   ngDoCheck(): void {
     if (this._ngForOfDirty) {
       this._ngForOfDirty = false;
       // React on ngForOf changes only once all inputs have been initialized
       const value = this._ngForOf;
+      console.log('判断', this._differ, value);
       if (!this._differ && value) {
         try {
+          console.log('尝试创建追踪策略');
           this._differ = this._differs.find(value).create(this.ngForTrackBy);
+          console.log(this._differ);
         } catch {
           throw new Error(
-              `Cannot find a differ supporting object '${value}' of type '${getTypeName(value)}'. NgFor only supports binding to Iterables such as Arrays.`);
+            `Cannot find a differ supporting object '${value}' of type '${getTypeName(value)}'. NgFor only supports binding to Iterables such as Arrays.`);
         }
       }
     }
     if (this._differ) {
+      console.log('判断是否变更', this._ngForOf);
       const changes = this._differ.diff(this._ngForOf);
       if (changes) this._applyChanges(changes);
     }
@@ -216,24 +224,24 @@ export class NgForOf<T> implements DoCheck {
   private _applyChanges(changes: IterableChanges<T>) {
     const insertTuples: RecordViewTuple<T>[] = [];
     changes.forEachOperation(
-        (item: IterableChangeRecord<any>, adjustedPreviousIndex: number | null,
-         currentIndex: number | null) => {
-          if (item.previousIndex == null) {
-            const view = this._viewContainer.createEmbeddedView(
-                this._template, new NgForOfContext<T>(null !, this._ngForOf, -1, -1),
-                currentIndex === null ? undefined : currentIndex);
-            const tuple = new RecordViewTuple<T>(item, view);
-            insertTuples.push(tuple);
-          } else if (currentIndex == null) {
-            this._viewContainer.remove(
-                adjustedPreviousIndex === null ? undefined : adjustedPreviousIndex);
-          } else if (adjustedPreviousIndex !== null) {
-            const view = this._viewContainer.get(adjustedPreviousIndex) !;
-            this._viewContainer.move(view, currentIndex);
-            const tuple = new RecordViewTuple(item, <EmbeddedViewRef<NgForOfContext<T>>>view);
-            insertTuples.push(tuple);
-          }
-        });
+      (item: IterableChangeRecord<any>, adjustedPreviousIndex: number | null,
+        currentIndex: number | null) => {
+        if (item.previousIndex == null) {
+          const view = this._viewContainer.createEmbeddedView(
+            this._template, new NgForOfContext<T>(null!, this._ngForOf, -1, -1),
+            currentIndex === null ? undefined : currentIndex);
+          const tuple = new RecordViewTuple<T>(item, view);
+          insertTuples.push(tuple);
+        } else if (currentIndex == null) {
+          this._viewContainer.remove(
+            adjustedPreviousIndex === null ? undefined : adjustedPreviousIndex);
+        } else if (adjustedPreviousIndex !== null) {
+          const view = this._viewContainer.get(adjustedPreviousIndex)!;
+          this._viewContainer.move(view, currentIndex);
+          const tuple = new RecordViewTuple(item, <EmbeddedViewRef<NgForOfContext<T>>>view);
+          insertTuples.push(tuple);
+        }
+      });
 
     for (let i = 0; i < insertTuples.length; i++) {
       this._perViewChange(insertTuples[i].view, insertTuples[i].record);
@@ -248,13 +256,13 @@ export class NgForOf<T> implements DoCheck {
 
     changes.forEachIdentityChange((record: any) => {
       const viewRef =
-          <EmbeddedViewRef<NgForOfContext<T>>>this._viewContainer.get(record.currentIndex);
+        <EmbeddedViewRef<NgForOfContext<T>>>this._viewContainer.get(record.currentIndex);
       viewRef.context.$implicit = record.item;
     });
   }
 
   private _perViewChange(
-      view: EmbeddedViewRef<NgForOfContext<T>>, record: IterableChangeRecord<any>) {
+    view: EmbeddedViewRef<NgForOfContext<T>>, record: IterableChangeRecord<any>) {
     view.context.$implicit = record.item;
   }
 
@@ -270,7 +278,7 @@ export class NgForOf<T> implements DoCheck {
 }
 
 class RecordViewTuple<T> {
-  constructor(public record: any, public view: EmbeddedViewRef<NgForOfContext<T>>) {}
+  constructor(public record: any, public view: EmbeddedViewRef<NgForOfContext<T>>) { }
 }
 
 function getTypeName(type: any): string {

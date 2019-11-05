@@ -113,7 +113,7 @@ export interface KeyValueDifferFactory {
 
 /**
  * A repository of different Map diffing strategies used by NgClass, NgStyle, and others.
- *
+ * 一个不同Map对比策略的仓库,用于NgClass,NgStyle等
  * @publicApi
  */
 export class KeyValueDiffers {

@@ -13,7 +13,8 @@ import {Injectable, Pipe, PipeTransform} from '@angular/core';
  * @description
  *
  * Converts a value into its JSON-format representation.  Useful for debugging.
- *
+ * 把一个值转换为它的JSON格式,用于debug
+ * 自动缩进两个字符
  * @usageNotes
  *
  * The following component uses a JSON pipe to convert an object
