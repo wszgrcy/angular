@@ -1,0 +1,1 @@
+cp -rf /data/dist/packages-dist/* /run/node_modules/@angular

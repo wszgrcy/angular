@@ -118,6 +118,8 @@ export class AsyncPipe implements OnDestroy, PipeTransform {
 
     this._latestReturnedValue = this._latestValue;
     //todo 为什么要创建一个包裹类包裹?
+    console.log('查看包裹类', WrappedValue.wrap(this._latestValue))
+    //doc 当1.传入的对象为原对象,2.在传入之时(下一次变更检测到来之前),原对象的值发生变化(next),会执行到这一步
     return WrappedValue.wrap(this._latestValue);
   }
 
@@ -161,6 +163,7 @@ export class AsyncPipe implements OnDestroy, PipeTransform {
     if (async === this._obj) {
       this._latestValue = value;
       this._ref.markForCheck();
+      console.log('触发了值变更,进行变更检测,', value)
     }
   }
 }
