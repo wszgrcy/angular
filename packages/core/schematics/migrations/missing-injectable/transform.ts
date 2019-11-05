@@ -6,16 +6,16 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {Reference} from '@angular/compiler-cli/src/ngtsc/imports';
-import {DynamicValue, PartialEvaluator, ResolvedValue} from '@angular/compiler-cli/src/ngtsc/partial_evaluator';
-import {TypeScriptReflectionHost} from '@angular/compiler-cli/src/ngtsc/reflection';
+import { Reference } from '@angular/compiler-cli/src/ngtsc/imports';
+import { DynamicValue, PartialEvaluator, ResolvedValue } from '@angular/compiler-cli/src/ngtsc/partial_evaluator';
+import { TypeScriptReflectionHost } from '@angular/compiler-cli/src/ngtsc/reflection';
 import * as ts from 'typescript';
 
-import {getAngularDecorators} from '../../utils/ng_decorators';
+import { getAngularDecorators } from '../../utils/ng_decorators';
 
-import {ImportManager} from './import_manager';
-import {ResolvedNgModule} from './module_collector';
-import {UpdateRecorder} from './update_recorder';
+import { ImportManager } from './import_manager';
+import { ResolvedNgModule } from './module_collector';
+import { UpdateRecorder } from './update_recorder';
 
 /** Name of decorators which imply that a given class does not need to be migrated. */
 const NO_MIGRATE_DECORATORS = ['Injectable', 'Directive', 'Component', 'Pipe'];
@@ -34,10 +34,10 @@ export class MissingInjectableTransform {
   private visitedProviderClasses = new Set<ts.ClassDeclaration>();
 
   constructor(
-      private typeChecker: ts.TypeChecker,
-      private getUpdateRecorder: (sf: ts.SourceFile) => UpdateRecorder) {
+    private typeChecker: ts.TypeChecker,
+    private getUpdateRecorder: (sf: ts.SourceFile) => UpdateRecorder) {
     this.partialEvaluator =
-        new PartialEvaluator(new TypeScriptReflectionHost(typeChecker), typeChecker);
+      new PartialEvaluator(new TypeScriptReflectionHost(typeChecker), typeChecker);
   }
 
   recordChanges() { this.importManager.recordChanges(); }
@@ -72,26 +72,26 @@ export class MissingInjectableTransform {
 
     const sourceFile = node.getSourceFile();
     const ngDecorators =
-        node.decorators ? getAngularDecorators(this.typeChecker, node.decorators) : null;
-
+      node.decorators ? getAngularDecorators(this.typeChecker, node.decorators) : null;
+    //doc ngDecorators的name是不是在非迁移装饰器中
     if (ngDecorators !== null &&
-        ngDecorators.some(d => NO_MIGRATE_DECORATORS.indexOf(d.name) !== -1)) {
+      ngDecorators.some(d => NO_MIGRATE_DECORATORS.indexOf(d.name) !== -1)) {
       return;
     }
 
     const updateRecorder = this.getUpdateRecorder(sourceFile);
     const importExpr =
-        this.importManager.addImportToSourceFile(sourceFile, 'Injectable', '@angular/core');
+      this.importManager.addImportToSourceFile(sourceFile, 'Injectable', '@angular/core');
     const newDecoratorExpr = ts.createDecorator(ts.createCall(importExpr, undefined, undefined));
     const newDecoratorText =
-        this.printer.printNode(ts.EmitHint.Unspecified, newDecoratorExpr, sourceFile);
+      this.printer.printNode(ts.EmitHint.Unspecified, newDecoratorExpr, sourceFile);
 
 
     // In case the class is already decorated with "@Inject(..)", we replace the "@Inject"
     // decorator with "@Injectable()" since using "@Inject(..)" on a class is a noop and
     // most likely was meant to be "@Injectable()".
     const existingInjectDecorator =
-        ngDecorators !== null ? ngDecorators.find(d => d.name === 'Inject') : null;
+      ngDecorators !== null ? ngDecorators.find(d => d.name === 'Inject') : null;
     if (existingInjectDecorator) {
       updateRecorder.replaceDecorator(existingInjectDecorator.node, newDecoratorText, module.name);
     } else {
@@ -105,7 +105,7 @@ export class MissingInjectableTransform {
    * migrate all referenced provider classes. e.g. "providers: [[A, [B]]]".
    */
   private _visitProviderResolvedValue(value: ResolvedValue, module: ResolvedNgModule):
-      AnalysisFailure[] {
+    AnalysisFailure[] {
     if (value instanceof Reference && ts.isClassDeclaration(value.node)) {
       this.migrateProviderClass(value.node, module);
     } else if (value instanceof Map) {
@@ -113,17 +113,17 @@ export class MissingInjectableTransform {
         return [];
       }
       if (value.has('useExisting')) {
-        return this._visitProviderResolvedValue(value.get('useExisting') !, module);
+        return this._visitProviderResolvedValue(value.get('useExisting')!, module);
       } else if (value.has('useClass')) {
-        return this._visitProviderResolvedValue(value.get('useClass') !, module);
+        return this._visitProviderResolvedValue(value.get('useClass')!, module);
       } else {
-        return this._visitProviderResolvedValue(value.get('provide') !, module);
+        return this._visitProviderResolvedValue(value.get('provide')!, module);
       }
     } else if (Array.isArray(value)) {
       return value.reduce((res, v) => res.concat(this._visitProviderResolvedValue(v, module)), [
       ] as AnalysisFailure[]);
     } else if (value instanceof DynamicValue) {
-      return [{node: value.node, message: `Provider is not statically analyzable.`}];
+      return [{ node: value.node, message: `Provider is not statically analyzable.` }];
     }
     return [];
   }
