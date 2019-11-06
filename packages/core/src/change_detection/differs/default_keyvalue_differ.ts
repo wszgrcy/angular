@@ -22,10 +22,10 @@ export class DefaultKeyValueDifferFactory<K, V> implements KeyValueDifferFactory
 export class DefaultKeyValueDiffer<K, V> implements KeyValueDiffer<K, V>, KeyValueChanges<K, V> {
   /**记录对象中每个字段的值 */
   private _records = new Map<K, KeyValueChangeRecord_<K, V>>();
-  /**_insertBeforeOrAppend中赋值,赋值的是_appendAfter链表头? */
+  /**第一次传入值的循环开始_insertBeforeOrAppend中赋值,赋值的是_appendAfter链表头? */
   private _mapHead: KeyValueChangeRecord_<K, V> | null = null;
   // _appendAfter is used in the check loop
-  /**check时置为null,第一次操作,返回的是一个对象=>链表,仅在check及调用方法中存在 */
+  /**check时置为null,第一次操作,返回的是一个对象=>链表,仅在check及调用方法中存在,每次循环到最后,应该都指向最后一个kv */
   private _appendAfter: KeyValueChangeRecord_<K, V> | null = null;
   private _previousMapHead: KeyValueChangeRecord_<K, V> | null = null;
   /**如果有值,意味着变更 */
@@ -96,9 +96,10 @@ export class DefaultKeyValueDiffer<K, V> implements KeyValueDiffer<K, V>, KeyVal
   check(/**传入的值*/map: Map<any, any> | { [k: string]: any }): boolean {
     this._reset();
     console.log('this._mapHead', this._mapHead)
+    /**代表上一次的位置?,第一次differ为null */
     let insertBefore = this._mapHead;
     this._appendAfter = null;
-    console.log('对内部的每个键值对运行_forEach')
+    console.log('====循环====')
     this._forEach(map, (value: any, key: any) => {
       console.log('key', key, 'value', value)
       console.log('insertBefore', insertBefore)
@@ -108,25 +109,31 @@ export class DefaultKeyValueDiffer<K, V> implements KeyValueDiffer<K, V>, KeyVal
         this._appendAfter = insertBefore;
         insertBefore = insertBefore._next;
       } else {
-        /**第一个kv的变更记录保存,仅运行一次 */
+        /**第一个kv的变更记录保存,在第一次differ运行或后续时obj变更 */
         const record = this._getOrCreateRecordForKey(key, value);
         insertBefore = this._insertBeforeOrAppend(insertBefore, record);
       }
     });
-
+    try {
+      console.log('insertBefore应该是最后一个,并且为上一次differ的第一个值?', { ...insertBefore });
+    } catch (error) {
+    }
+    console.log('====结束====')
     // Items remaining at the end of the list have been deleted
     if (insertBefore) {
+      //doc 断开insertBefore自身
       if (insertBefore._prev) {
         insertBefore._prev._next = null;
       }
 
       this._removalsHead = insertBefore;
-
+      //doc 清空所有记录?
       for (let record: KeyValueChangeRecord_<K, V> | null = insertBefore; record !== null;
         record = record._nextRemoved) {
         if (record === this._mapHead) {
           this._mapHead = null;
         }
+        console.log(record.key);
         this._records.delete(record.key);
         record._nextRemoved = record._next;
         record.previousValue = record.currentValue;
@@ -134,6 +141,7 @@ export class DefaultKeyValueDiffer<K, V> implements KeyValueDiffer<K, V>, KeyVal
         record._prev = null;
         record._next = null;
       }
+      console.log('最后records剩余', this._records);
     }
 
     // Make sure tails have no next records from previous runs
@@ -155,6 +163,7 @@ export class DefaultKeyValueDiffer<K, V> implements KeyValueDiffer<K, V>, KeyVal
     before: KeyValueChangeRecord_<K, V> | null,
     record: KeyValueChangeRecord_<K, V>): KeyValueChangeRecord_<K, V> | null {
     if (before) {
+      //doc 把record插入到prev之后,before之前即 (before)prev->record->before
       const prev = before._prev;
       record._next = before;
       record._prev = prev;
@@ -162,6 +171,7 @@ export class DefaultKeyValueDiffer<K, V> implements KeyValueDiffer<K, V>, KeyVal
       if (prev) {
         prev._next = record;
       }
+      //doc 如果是第一个,那么重置为第一个记录
       if (before === this._mapHead) {
         this._mapHead = record;
       }
@@ -175,9 +185,9 @@ export class DefaultKeyValueDiffer<K, V> implements KeyValueDiffer<K, V>, KeyVal
     } else {
       this._mapHead = record;
     }
-
+    //doc 应该永远都是最后一个
     this._appendAfter = record;
-
+    console.log('对象中的最后一个kv?', this._appendAfter)
     //doc 第一次的时候,循环返回永远是null
     return null;
   }
@@ -195,11 +205,12 @@ export class DefaultKeyValueDiffer<K, V> implements KeyValueDiffer<K, V>, KeyVal
   private _getOrCreateRecordForKey(key: K, value: V): KeyValueChangeRecord_<K, V> {
     //doc 如果有记录(key在上一次存在),才会走这里
     if (this._records.has(key)) {
+      /**当前key的记录类 */
       const record = this._records.get(key)!;
       this._maybeAddToChanges(record, value);
       const prev = record._prev;
       const next = record._next;
-      console.log('prev', prev, 'now', record, 'next', next)
+      //? 把record从链表中拿出来?
       if (prev) {
         prev._next = next;
       }
