@@ -57,14 +57,14 @@ export function makeDecorator<T>(
 
     const annotationInstance = new (DecoratorFactory as any)(...args);
     return function TypeDecorator(cls: Type<T>) {
-      console.warn('传入的应该是构造函数,所有使用装饰器的都会走这个', cls)
+      //doc 传入的都是增加了angular自身装饰器的类
       if (typeFn) typeFn(cls, ...args);
       // Use of Object.defineProperty is important since it creates non-enumerable property which
       // prevents the property is copied during subclassing.
+      //doc 把被同一装饰器装饰过的类放到同一数组中
       const annotations = cls.hasOwnProperty(ANNOTATIONS) ?
         (cls as any)[ANNOTATIONS] :
         Object.defineProperty(cls, ANNOTATIONS, { value: [] })[ANNOTATIONS];
-      console.log('设置注释', annotations)
       annotations.push(annotationInstance);
 
 
@@ -80,7 +80,6 @@ export function makeDecorator<T>(
 
   DecoratorFactory.prototype.ngMetadataName = name;
   (DecoratorFactory as any).annotationCls = DecoratorFactory;
-  console.log('最后返回的DecoratorFactory', DecoratorFactory);
   return DecoratorFactory as any;
 }
 

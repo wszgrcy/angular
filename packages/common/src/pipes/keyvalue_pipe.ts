@@ -6,10 +6,10 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {Injectable, KeyValueChangeRecord, KeyValueChanges, KeyValueDiffer, KeyValueDiffers, Pipe, PipeTransform} from '@angular/core';
+import { Injectable, KeyValueChangeRecord, KeyValueChanges, KeyValueDiffer, KeyValueDiffers, Pipe, PipeTransform } from '@angular/core';
 
 function makeKeyValuePair<K, V>(key: K, value: V): KeyValue<K, V> {
-  return {key: key, value: value};
+  return { key: key, value: value };
 }
 
 /**
@@ -45,43 +45,42 @@ export interface KeyValue<K, V> {
  * @publicApi
  */
 @Injectable()
-@Pipe({name: 'keyvalue', pure: false})
+@Pipe({ name: 'keyvalue', pure: false })
 export class KeyValuePipe implements PipeTransform {
-  constructor(private readonly differs: KeyValueDiffers) {}
+  constructor(private readonly differs: KeyValueDiffers) { }
 
   private differ !: KeyValueDiffer<any, any>;
   private keyValues: Array<KeyValue<any, any>> = [];
 
   transform<K, V>(input: null, compareFn?: (a: KeyValue<K, V>, b: KeyValue<K, V>) => number): null;
   transform<V>(
-      input: {[key: string]: V}|Map<string, V>,
-      compareFn?: (a: KeyValue<string, V>, b: KeyValue<string, V>) => number):
-      Array<KeyValue<string, V>>;
+    input: { [key: string]: V } | Map<string, V>,
+    compareFn?: (a: KeyValue<string, V>, b: KeyValue<string, V>) => number):
+    Array<KeyValue<string, V>>;
   transform<V>(
-      input: {[key: number]: V}|Map<number, V>,
-      compareFn?: (a: KeyValue<number, V>, b: KeyValue<number, V>) => number):
-      Array<KeyValue<number, V>>;
+    input: { [key: number]: V } | Map<number, V>,
+    compareFn?: (a: KeyValue<number, V>, b: KeyValue<number, V>) => number):
+    Array<KeyValue<number, V>>;
   transform<K, V>(input: Map<K, V>, compareFn?: (a: KeyValue<K, V>, b: KeyValue<K, V>) => number):
-      Array<KeyValue<K, V>>;
+    Array<KeyValue<K, V>>;
   transform<K, V>(
-      input: null|{[key: string]: V, [key: number]: V}|Map<K, V>,
-      compareFn: (a: KeyValue<K, V>, b: KeyValue<K, V>) => number = defaultComparator):
-      Array<KeyValue<K, V>>|null {
+    input: null | { [key: string]: V, [key: number]: V } | Map<K, V>,
+    compareFn: (a: KeyValue<K, V>, b: KeyValue<K, V>) => number = defaultComparator):
+    Array<KeyValue<K, V>> | null {
     if (!input || (!(input instanceof Map) && typeof input !== 'object')) {
       return null;
     }
-
     if (!this.differ) {
       // make a differ for whatever type we've been passed in
       this.differ = this.differs.find(input).create();
     }
 
-    const differChanges: KeyValueChanges<K, V>|null = this.differ.diff(input as any);
+    const differChanges: KeyValueChanges<K, V> | null = this.differ.diff(input as any);
 
     if (differChanges) {
       this.keyValues = [];
       differChanges.forEachItem((r: KeyValueChangeRecord<K, V>) => {
-        this.keyValues.push(makeKeyValuePair(r.key, r.currentValue !));
+        this.keyValues.push(makeKeyValuePair(r.key, r.currentValue!));
       });
       this.keyValues.sort(compareFn);
     }
@@ -90,7 +89,7 @@ export class KeyValuePipe implements PipeTransform {
 }
 
 export function defaultComparator<K, V>(
-    keyValueA: KeyValue<K, V>, keyValueB: KeyValue<K, V>): number {
+  keyValueA: KeyValue<K, V>, keyValueB: KeyValue<K, V>): number {
   const a = keyValueA.key;
   const b = keyValueB.key;
   // if same exit with 0;

@@ -6,101 +6,109 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {looseIdentical} from '../../util/comparison';
-import {stringify} from '../../util/stringify';
-import {isJsObject} from '../change_detection_util';
-import {KeyValueChangeRecord, KeyValueChanges, KeyValueDiffer, KeyValueDifferFactory} from './keyvalue_differs';
+import { looseIdentical } from '../../util/comparison';
+import { stringify } from '../../util/stringify';
+import { isJsObject } from '../change_detection_util';
+import { KeyValueChangeRecord, KeyValueChanges, KeyValueDiffer, KeyValueDifferFactory } from './keyvalue_differs';
 
 
 export class DefaultKeyValueDifferFactory<K, V> implements KeyValueDifferFactory {
-  constructor() {}
+  constructor() { }
   supports(obj: any): boolean { return obj instanceof Map || isJsObject(obj); }
 
   create<K, V>(): KeyValueDiffer<K, V> { return new DefaultKeyValueDiffer<K, V>(); }
 }
 
 export class DefaultKeyValueDiffer<K, V> implements KeyValueDiffer<K, V>, KeyValueChanges<K, V> {
+  /**记录对象中每个字段的值 */
   private _records = new Map<K, KeyValueChangeRecord_<K, V>>();
-  private _mapHead: KeyValueChangeRecord_<K, V>|null = null;
+  /**_insertBeforeOrAppend中赋值,赋值的是_appendAfter链表头? */
+  private _mapHead: KeyValueChangeRecord_<K, V> | null = null;
   // _appendAfter is used in the check loop
-  private _appendAfter: KeyValueChangeRecord_<K, V>|null = null;
-  private _previousMapHead: KeyValueChangeRecord_<K, V>|null = null;
-  private _changesHead: KeyValueChangeRecord_<K, V>|null = null;
-  private _changesTail: KeyValueChangeRecord_<K, V>|null = null;
-  private _additionsHead: KeyValueChangeRecord_<K, V>|null = null;
-  private _additionsTail: KeyValueChangeRecord_<K, V>|null = null;
-  private _removalsHead: KeyValueChangeRecord_<K, V>|null = null;
-  private _removalsTail: KeyValueChangeRecord_<K, V>|null = null;
+  /**check时置为null,第一次操作,返回的是一个对象=>链表,仅在check及调用方法中存在 */
+  private _appendAfter: KeyValueChangeRecord_<K, V> | null = null;
+  private _previousMapHead: KeyValueChangeRecord_<K, V> | null = null;
+  /**如果有值,意味着变更 */
+  private _changesHead: KeyValueChangeRecord_<K, V> | null = null;
+  private _changesTail: KeyValueChangeRecord_<K, V> | null = null;
+  private _additionsHead: KeyValueChangeRecord_<K, V> | null = null;
+  private _additionsTail: KeyValueChangeRecord_<K, V> | null = null;
+  private _removalsHead: KeyValueChangeRecord_<K, V> | null = null;
+  private _removalsTail: KeyValueChangeRecord_<K, V> | null = null;
 
   get isDirty(): boolean {
     return this._additionsHead !== null || this._changesHead !== null ||
-        this._removalsHead !== null;
+      this._removalsHead !== null;
   }
 
   forEachItem(fn: (r: KeyValueChangeRecord<K, V>) => void) {
-    let record: KeyValueChangeRecord_<K, V>|null;
+    let record: KeyValueChangeRecord_<K, V> | null;
     for (record = this._mapHead; record !== null; record = record._next) {
       fn(record);
     }
   }
 
   forEachPreviousItem(fn: (r: KeyValueChangeRecord<K, V>) => void) {
-    let record: KeyValueChangeRecord_<K, V>|null;
+    let record: KeyValueChangeRecord_<K, V> | null;
     for (record = this._previousMapHead; record !== null; record = record._nextPrevious) {
       fn(record);
     }
   }
 
   forEachChangedItem(fn: (r: KeyValueChangeRecord<K, V>) => void) {
-    let record: KeyValueChangeRecord_<K, V>|null;
+    let record: KeyValueChangeRecord_<K, V> | null;
     for (record = this._changesHead; record !== null; record = record._nextChanged) {
       fn(record);
     }
   }
 
   forEachAddedItem(fn: (r: KeyValueChangeRecord<K, V>) => void) {
-    let record: KeyValueChangeRecord_<K, V>|null;
+    let record: KeyValueChangeRecord_<K, V> | null;
     for (record = this._additionsHead; record !== null; record = record._nextAdded) {
       fn(record);
     }
   }
 
   forEachRemovedItem(fn: (r: KeyValueChangeRecord<K, V>) => void) {
-    let record: KeyValueChangeRecord_<K, V>|null;
+    let record: KeyValueChangeRecord_<K, V> | null;
     for (record = this._removalsHead; record !== null; record = record._nextRemoved) {
       fn(record);
     }
   }
 
-  diff(map?: Map<any, any>|{[k: string]: any}|null): any {
+  diff(map?: Map<any, any> | { [k: string]: any } | null): any {
     if (!map) {
       map = new Map();
     } else if (!(map instanceof Map || isJsObject(map))) {
       throw new Error(
-          `Error trying to diff '${stringify(map)}'. Only maps and objects are allowed`);
+        `Error trying to diff '${stringify(map)}'. Only maps and objects are allowed`);
     }
 
     return this.check(map) ? this : null;
   }
 
-  onDestroy() {}
+  onDestroy() { }
 
   /**
    * Check the current state of the map vs the previous.
    * The algorithm is optimised for when the keys do no change.
    */
-  check(map: Map<any, any>|{[k: string]: any}): boolean {
+  check(/**传入的值*/map: Map<any, any> | { [k: string]: any }): boolean {
     this._reset();
-
+    console.log('this._mapHead', this._mapHead)
     let insertBefore = this._mapHead;
     this._appendAfter = null;
-
+    console.log('对内部的每个键值对运行_forEach')
     this._forEach(map, (value: any, key: any) => {
+      console.log('key', key, 'value', value)
+      console.log('insertBefore', insertBefore)
+      //doc key值是否和上次的相等
       if (insertBefore && insertBefore.key === key) {
         this._maybeAddToChanges(insertBefore, value);
         this._appendAfter = insertBefore;
         insertBefore = insertBefore._next;
       } else {
+        /**第一个kv的变更记录保存,仅运行一次 */
         const record = this._getOrCreateRecordForKey(key, value);
         insertBefore = this._insertBeforeOrAppend(insertBefore, record);
       }
@@ -114,8 +122,8 @@ export class DefaultKeyValueDiffer<K, V> implements KeyValueDiffer<K, V>, KeyVal
 
       this._removalsHead = insertBefore;
 
-      for (let record: KeyValueChangeRecord_<K, V>|null = insertBefore; record !== null;
-           record = record._nextRemoved) {
+      for (let record: KeyValueChangeRecord_<K, V> | null = insertBefore; record !== null;
+        record = record._nextRemoved) {
         if (record === this._mapHead) {
           this._mapHead = null;
         }
@@ -144,8 +152,8 @@ export class DefaultKeyValueDiffer<K, V> implements KeyValueDiffer<K, V>, KeyVal
    * - The return value is the new value for the insertion pointer.
    */
   private _insertBeforeOrAppend(
-      before: KeyValueChangeRecord_<K, V>|null,
-      record: KeyValueChangeRecord_<K, V>): KeyValueChangeRecord_<K, V>|null {
+    before: KeyValueChangeRecord_<K, V> | null,
+    record: KeyValueChangeRecord_<K, V>): KeyValueChangeRecord_<K, V> | null {
     if (before) {
       const prev = before._prev;
       record._next = before;
@@ -161,7 +169,6 @@ export class DefaultKeyValueDiffer<K, V> implements KeyValueDiffer<K, V>, KeyVal
       this._appendAfter = before;
       return before;
     }
-
     if (this._appendAfter) {
       this._appendAfter._next = record;
       record._prev = this._appendAfter;
@@ -170,15 +177,29 @@ export class DefaultKeyValueDiffer<K, V> implements KeyValueDiffer<K, V>, KeyVal
     }
 
     this._appendAfter = record;
+
+    //doc 第一次的时候,循环返回永远是null
     return null;
   }
 
+  /**
+   * 返回或者创建一个新的记录
+   *
+   * @author cyia
+   * @date 2019-11-05
+   * @private
+   * @param key
+   * @param value
+   * @returns
+   */
   private _getOrCreateRecordForKey(key: K, value: V): KeyValueChangeRecord_<K, V> {
+    //doc 如果有记录(key在上一次存在),才会走这里
     if (this._records.has(key)) {
-      const record = this._records.get(key) !;
+      const record = this._records.get(key)!;
       this._maybeAddToChanges(record, value);
       const prev = record._prev;
       const next = record._next;
+      console.log('prev', prev, 'now', record, 'next', next)
       if (prev) {
         prev._next = next;
       }
@@ -200,19 +221,23 @@ export class DefaultKeyValueDiffer<K, V> implements KeyValueDiffer<K, V>, KeyVal
 
   /** @internal */
   _reset() {
+    console.log('====dirty', this.isDirty)
     if (this.isDirty) {
-      let record: KeyValueChangeRecord_<K, V>|null;
+      let record: KeyValueChangeRecord_<K, V> | null;
       // let `_previousMapHead` contain the state of the map before the changes
+      console.log(`this._mapHead`, this._mapHead)
       this._previousMapHead = this._mapHead;
       for (record = this._previousMapHead; record !== null; record = record._next) {
         record._nextPrevious = record._next;
       }
+      console.log(`this._changesHead`, this._changesHead)
 
       // Update `record.previousValue` with the value of the item before the changes
       // We need to update all changed items (that's those which have been added and changed)
       for (record = this._changesHead; record !== null; record = record._nextChanged) {
         record.previousValue = record.currentValue;
       }
+      console.log(`this._additionsHead`, this._additionsHead)
       for (record = this._additionsHead; record != null; record = record._nextAdded) {
         record.previousValue = record.currentValue;
       }
@@ -220,10 +245,20 @@ export class DefaultKeyValueDiffer<K, V> implements KeyValueDiffer<K, V>, KeyVal
       this._changesHead = this._changesTail = null;
       this._additionsHead = this._additionsTail = null;
       this._removalsHead = null;
+      console.log('====dirty结束')
     }
   }
 
   // Add the record or a given key to the list of changes only when the value has actually changed
+  /**
+   * 判断是否可能发生了变化
+   *
+   * @author cyia
+   * @date 2019-11-06
+   * @private
+   * @param record
+   * @param newValue
+   */
   private _maybeAddToChanges(record: KeyValueChangeRecord_<K, V>, newValue: any): void {
     if (!looseIdentical(newValue, record.currentValue)) {
       record.previousValue = record.currentValue;
@@ -232,11 +267,19 @@ export class DefaultKeyValueDiffer<K, V> implements KeyValueDiffer<K, V>, KeyVal
     }
   }
 
+  /**
+   * 一个链?
+   *
+   * @author cyia
+   * @date 2019-11-05
+   * @private
+   * @param record
+   */
   private _addToAdditions(record: KeyValueChangeRecord_<K, V>) {
     if (this._additionsHead === null) {
       this._additionsHead = this._additionsTail = record;
     } else {
-      this._additionsTail !._nextAdded = record;
+      this._additionsTail!._nextAdded = record;
       this._additionsTail = record;
     }
   }
@@ -245,13 +288,13 @@ export class DefaultKeyValueDiffer<K, V> implements KeyValueDiffer<K, V>, KeyVal
     if (this._changesHead === null) {
       this._changesHead = this._changesTail = record;
     } else {
-      this._changesTail !._nextChanged = record;
+      this._changesTail!._nextChanged = record;
       this._changesTail = record;
     }
   }
 
   /** @internal */
-  private _forEach<K, V>(obj: Map<K, V>|{[k: string]: V}, fn: (v: V, k: any) => void) {
+  private _forEach<K, V>(obj: Map<K, V> | { [k: string]: V }, fn: (v: V, k: any) => void) {
     if (obj instanceof Map) {
       obj.forEach(fn);
     } else {
@@ -261,21 +304,21 @@ export class DefaultKeyValueDiffer<K, V> implements KeyValueDiffer<K, V>, KeyVal
 }
 
 class KeyValueChangeRecord_<K, V> implements KeyValueChangeRecord<K, V> {
-  previousValue: V|null = null;
-  currentValue: V|null = null;
+  previousValue: V | null = null;
+  currentValue: V | null = null;
 
   /** @internal */
-  _nextPrevious: KeyValueChangeRecord_<K, V>|null = null;
+  _nextPrevious: KeyValueChangeRecord_<K, V> | null = null;
   /** @internal */
-  _next: KeyValueChangeRecord_<K, V>|null = null;
+  _next: KeyValueChangeRecord_<K, V> | null = null;
   /** @internal */
-  _prev: KeyValueChangeRecord_<K, V>|null = null;
+  _prev: KeyValueChangeRecord_<K, V> | null = null;
   /** @internal */
-  _nextAdded: KeyValueChangeRecord_<K, V>|null = null;
+  _nextAdded: KeyValueChangeRecord_<K, V> | null = null;
   /** @internal */
-  _nextRemoved: KeyValueChangeRecord_<K, V>|null = null;
+  _nextRemoved: KeyValueChangeRecord_<K, V> | null = null;
   /** @internal */
-  _nextChanged: KeyValueChangeRecord_<K, V>|null = null;
+  _nextChanged: KeyValueChangeRecord_<K, V> | null = null;
 
-  constructor(public key: K) {}
+  constructor(public key: K) { }
 }

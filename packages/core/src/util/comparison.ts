@@ -9,7 +9,17 @@
 import {areIterablesEqual, isListLikeIterable} from './iterable';
 
 
-// JS has NaN !== NaN
+
+/**
+ * 正常人逻辑上认为的相等
+ * JS has NaN !== NaN
+ * @author cyia
+ * @date 2019-11-05
+ * @export
+ * @param a
+ * @param b
+ * @returns
+ */
 export function looseIdentical(a: any, b: any): boolean {
   return a === b || typeof a === 'number' && typeof b === 'number' && isNaN(a) && isNaN(b);
 }

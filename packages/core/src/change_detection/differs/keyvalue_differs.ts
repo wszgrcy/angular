@@ -6,8 +6,8 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {Optional, SkipSelf, StaticProvider, ɵɵdefineInjectable} from '../../di';
-import {DefaultKeyValueDifferFactory} from './default_keyvalue_differ';
+import { Optional, SkipSelf, StaticProvider, ɵɵdefineInjectable } from '../../di';
+import { DefaultKeyValueDifferFactory } from './default_keyvalue_differ';
 
 
 /**
@@ -23,7 +23,7 @@ export interface KeyValueDiffer<K, V> {
    * @returns an object describing the difference. The return value is only valid until the next
    * `diff()` invocation.
    */
-  diff(object: Map<K, V>): KeyValueChanges<K, V>|null;
+  diff(object: Map<K, V>): KeyValueChanges<K, V> | null;
 
   /**
    * Compute a difference between the previous state and the new `object` state.
@@ -32,7 +32,7 @@ export interface KeyValueDiffer<K, V> {
    * @returns an object describing the difference. The return value is only valid until the next
    * `diff()` invocation.
    */
-  diff(object: {[key: string]: V}): KeyValueChanges<string, V>|null;
+  diff(object: { [key: string]: V }): KeyValueChanges<string, V> | null;
   // TODO(TS2.1): diff<KP extends string>(this: KeyValueDiffer<KP, V>, object: Record<KP, V>):
   // KeyValueDiffer<KP, V>;
 }
@@ -86,12 +86,12 @@ export interface KeyValueChangeRecord<K, V> {
   /**
    * Current value for the key or `null` if removed.
    */
-  readonly currentValue: V|null;
+  readonly currentValue: V | null;
 
   /**
    * Previous value for the key or `null` if added.
    */
-  readonly previousValue: V|null;
+  readonly previousValue: V | null;
 }
 
 /**
@@ -132,6 +132,7 @@ export class KeyValueDiffers {
   constructor(factories: KeyValueDifferFactory[]) { this.factories = factories; }
 
   static create<S>(factories: KeyValueDifferFactory[], parent?: KeyValueDiffers): KeyValueDiffers {
+    console.log('传入对比工厂组', factories, 'parent', parent)
     if (parent) {
       const copied = parent.factories.slice();
       factories = factories.concat(copied);
