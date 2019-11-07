@@ -27,7 +27,7 @@ export interface KeyValue<K, V> {
  * @ngModule CommonModule
  * @description
  * 接受Map或者对象
- * ! 需要依赖注入相关知识
+ * 默认使用 DefaultKeyValueDiffer 对比
  * Transforms Object or Map into an array of key value pairs.
  *
  * The output array will be ordered by keys.
@@ -83,11 +83,12 @@ export class KeyValuePipe implements PipeTransform {
         this.keyValues.push(makeKeyValuePair(r.key, r.currentValue!));
       });
       this.keyValues.sort(compareFn);
+      console.log('排序后的kv列表', this.keyValues.sort(compareFn));
     }
     return this.keyValues;
   }
 }
-
+/**默认的排序方法, */
 export function defaultComparator<K, V>(
   keyValueA: KeyValue<K, V>, keyValueB: KeyValue<K, V>): number {
   const a = keyValueA.key;

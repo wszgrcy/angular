@@ -625,7 +625,7 @@ export interface Pipe {
    */
   pure?: boolean;
 }
-
+//doc 管道装饰器
 /**
  * @Annotation
  * @publicApi
