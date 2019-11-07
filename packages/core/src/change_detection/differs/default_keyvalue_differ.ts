@@ -25,12 +25,13 @@ export class DefaultKeyValueDiffer<K, V> implements KeyValueDiffer<K, V>, KeyVal
   /**第一次传入值的循环开始_insertBeforeOrAppend中赋值,赋值的是_appendAfter链表头? */
   private _mapHead: KeyValueChangeRecord_<K, V> | null = null;
   // _appendAfter is used in the check loop
-  /**check时置为null,第一次操作,返回的是一个对象=>链表,仅在check及调用方法中存在,每次循环到最后,应该都指向最后一个kv */
+  /**返回的是一个对象=>链表,仅在check及调用方法中存在,指向链表中的最后一个kv,初始化时有用,之后没用到 */
   private _appendAfter: KeyValueChangeRecord_<K, V> | null = null;
   private _previousMapHead: KeyValueChangeRecord_<K, V> | null = null;
-  /**如果有值,意味着变更 */
+  /**当对象中,如果有值变更,意味着变更 */
   private _changesHead: KeyValueChangeRecord_<K, V> | null = null;
   private _changesTail: KeyValueChangeRecord_<K, V> | null = null;
+  /**当对象中,添加了新值,回赋值 */
   private _additionsHead: KeyValueChangeRecord_<K, V> | null = null;
   private _additionsTail: KeyValueChangeRecord_<K, V> | null = null;
   private _removalsHead: KeyValueChangeRecord_<K, V> | null = null;
@@ -95,14 +96,10 @@ export class DefaultKeyValueDiffer<K, V> implements KeyValueDiffer<K, V>, KeyVal
    */
   check(/**传入的值*/map: Map<any, any> | { [k: string]: any }): boolean {
     this._reset();
-    console.log('this._mapHead', this._mapHead)
     /**代表上一次的位置?,第一次differ为null */
     let insertBefore = this._mapHead;
     this._appendAfter = null;
-    console.log('====循环====')
     this._forEach(map, (value: any, key: any) => {
-      console.log('key', key, 'value', value)
-      console.log('insertBefore', insertBefore)
       //doc key值是否和上次的相等
       if (insertBefore && insertBefore.key === key) {
         this._maybeAddToChanges(insertBefore, value);
@@ -114,11 +111,6 @@ export class DefaultKeyValueDiffer<K, V> implements KeyValueDiffer<K, V>, KeyVal
         insertBefore = this._insertBeforeOrAppend(insertBefore, record);
       }
     });
-    try {
-      console.log('insertBefore应该是最后一个,并且为上一次differ的第一个值?', { ...insertBefore });
-    } catch (error) {
-    }
-    console.log('====结束====')
     // Items remaining at the end of the list have been deleted
     if (insertBefore) {
       //doc 断开insertBefore自身
@@ -133,7 +125,6 @@ export class DefaultKeyValueDiffer<K, V> implements KeyValueDiffer<K, V>, KeyVal
         if (record === this._mapHead) {
           this._mapHead = null;
         }
-        console.log(record.key);
         this._records.delete(record.key);
         record._nextRemoved = record._next;
         record.previousValue = record.currentValue;
@@ -141,7 +132,6 @@ export class DefaultKeyValueDiffer<K, V> implements KeyValueDiffer<K, V>, KeyVal
         record._prev = null;
         record._next = null;
       }
-      console.log('最后records剩余', this._records);
     }
 
     // Make sure tails have no next records from previous runs
@@ -179,6 +169,7 @@ export class DefaultKeyValueDiffer<K, V> implements KeyValueDiffer<K, V>, KeyVal
       this._appendAfter = before;
       return before;
     }
+    //↓这部分只有初始化才执行
     if (this._appendAfter) {
       this._appendAfter._next = record;
       record._prev = this._appendAfter;
@@ -187,14 +178,13 @@ export class DefaultKeyValueDiffer<K, V> implements KeyValueDiffer<K, V>, KeyVal
     }
     //doc 应该永远都是最后一个
     this._appendAfter = record;
-    console.log('对象中的最后一个kv?', this._appendAfter)
     //doc 第一次的时候,循环返回永远是null
     return null;
   }
 
   /**
    * 返回或者创建一个新的记录
-   *
+   * 新增一个记录时,会把他加入到新增链表中
    * @author cyia
    * @date 2019-11-05
    * @private
@@ -232,31 +222,29 @@ export class DefaultKeyValueDiffer<K, V> implements KeyValueDiffer<K, V>, KeyVal
 
   /** @internal */
   _reset() {
-    console.log('====dirty', this.isDirty)
     if (this.isDirty) {
       let record: KeyValueChangeRecord_<K, V> | null;
       // let `_previousMapHead` contain the state of the map before the changes
-      console.log(`this._mapHead`, this._mapHead)
+      //doc 貌似differ中无用
       this._previousMapHead = this._mapHead;
       for (record = this._previousMapHead; record !== null; record = record._next) {
         record._nextPrevious = record._next;
       }
-      console.log(`this._changesHead`, this._changesHead)
 
       // Update `record.previousValue` with the value of the item before the changes
       // We need to update all changed items (that's those which have been added and changed)
+      //doc 用于接下来的对比,把上一次的值放到pre中
       for (record = this._changesHead; record !== null; record = record._nextChanged) {
         record.previousValue = record.currentValue;
       }
-      console.log(`this._additionsHead`, this._additionsHead)
+      //?当前值变成前一个值?用途?
       for (record = this._additionsHead; record != null; record = record._nextAdded) {
         record.previousValue = record.currentValue;
       }
-
+      //doc 清除上一次的记录,此时dirty应该是false
       this._changesHead = this._changesTail = null;
       this._additionsHead = this._additionsTail = null;
       this._removalsHead = null;
-      console.log('====dirty结束')
     }
   }
 
@@ -279,8 +267,8 @@ export class DefaultKeyValueDiffer<K, V> implements KeyValueDiffer<K, V>, KeyVal
   }
 
   /**
-   * 一个链?
-   *
+   * 新增链表,每当加入了不同的key,都会把这个当作新增的加入
+   * 
    * @author cyia
    * @date 2019-11-05
    * @private
@@ -295,6 +283,14 @@ export class DefaultKeyValueDiffer<K, V> implements KeyValueDiffer<K, V>, KeyVal
     }
   }
 
+  /**
+   * 变更链表,每当key对应的value变化,都会加入到变更链表
+   *
+   * @author cyia
+   * @date 2019-11-06
+   * @private
+   * @param record
+   */
   private _addToChanges(record: KeyValueChangeRecord_<K, V>) {
     if (this._changesHead === null) {
       this._changesHead = this._changesTail = record;
