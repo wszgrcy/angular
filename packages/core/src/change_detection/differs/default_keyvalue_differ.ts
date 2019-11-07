@@ -42,6 +42,11 @@ export class DefaultKeyValueDiffer<K, V> implements KeyValueDiffer<K, V>, KeyVal
       this._removalsHead !== null;
   }
 
+  /**
+   * 通过链表头遍历链表
+   *
+   * @param {(r: KeyValueChangeRecord<K, V>) => void} fn
+   */
   forEachItem(fn: (r: KeyValueChangeRecord<K, V>) => void) {
     let record: KeyValueChangeRecord_<K, V> | null;
     for (record = this._mapHead; record !== null; record = record._next) {
@@ -90,15 +95,12 @@ export class DefaultKeyValueDiffer<K, V> implements KeyValueDiffer<K, V>, KeyVal
 
   onDestroy() { }
 
-  /**
-   * Check the current state of the map vs the previous.
-   * The algorithm is optimised for when the keys do no change.
-   */
   check(/**传入的值*/map: Map<any, any> | { [k: string]: any }): boolean {
     this._reset();
-    /**代表上一次的位置?,第一次differ为null */
+    /**代表下一次的位置,第一次differ为null */
     let insertBefore = this._mapHead;
     this._appendAfter = null;
+    //? 如果第一个匹配成功,第二个没成功,匹配第三个时候,insertBefore应该还是第二个
     this._forEach(map, (value: any, key: any) => {
       //doc key值是否和上次的相等
       if (insertBefore && insertBefore.key === key) {
@@ -125,6 +127,7 @@ export class DefaultKeyValueDiffer<K, V> implements KeyValueDiffer<K, V>, KeyVal
         if (record === this._mapHead) {
           this._mapHead = null;
         }
+        console.log('删除记录',{ ...record }, { ...this._mapHead })
         this._records.delete(record.key);
         record._nextRemoved = record._next;
         record.previousValue = record.currentValue;
@@ -161,7 +164,7 @@ export class DefaultKeyValueDiffer<K, V> implements KeyValueDiffer<K, V>, KeyVal
       if (prev) {
         prev._next = record;
       }
-      //doc 如果是第一个,那么重置为第一个记录
+      //doc 如果是第一个并且没匹配上,那么重置为第一个记录
       if (before === this._mapHead) {
         this._mapHead = record;
       }

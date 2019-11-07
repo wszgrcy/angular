@@ -7,7 +7,7 @@
  */
 
 import { Injectable, KeyValueChangeRecord, KeyValueChanges, KeyValueDiffer, KeyValueDiffers, Pipe, PipeTransform } from '@angular/core';
-
+/**两个值转换为kv对象 */
 function makeKeyValuePair<K, V>(key: K, value: V): KeyValue<K, V> {
   return { key: key, value: value };
 }
