@@ -28,6 +28,7 @@ import {InjectionToken} from '@angular/core';
  * class they are all platform independent.
  *
  * @publicApi
+ * 应该是用来代替浏览器location的
  */
 export abstract class PlatformLocation {
   abstract getBaseHrefFromDOM(): string;

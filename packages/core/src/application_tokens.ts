@@ -42,6 +42,7 @@ function _randomChar(): string {
 
 /**
  * A function that will be executed when a platform is initialized.
+ * 平台初始化后将要执行的函数 token
  * @publicApi
  */
 export const PLATFORM_INITIALIZER = new InjectionToken<Array<() => void>>('Platform Initializer');

@@ -9,6 +9,9 @@
 import {Injectable} from './di';
 
 @Injectable()
+/**内部默认输出?
+ * ? 好像是为了适用不同平台
+ */
 export class Console {
   log(message: string): void {
     // tslint:disable-next-line:no-console

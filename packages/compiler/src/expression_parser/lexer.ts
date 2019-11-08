@@ -19,7 +19,7 @@ export enum TokenType {
 }
 
 const KEYWORDS = ['var', 'let', 'as', 'null', 'undefined', 'true', 'false', 'if', 'else', 'this'];
-
+/**词法分析 */
 export class Lexer {
   tokenize(text: string): Token[] {
     const scanner = new _Scanner(text);

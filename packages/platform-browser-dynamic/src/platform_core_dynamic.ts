@@ -11,10 +11,11 @@ import {JitCompilerFactory} from './compiler_factory';
 
 /**
  * A platform that included corePlatform and the compiler.
- *
+ * doc 入口第一个参数
  * @publicApi
  */
 export const platformCoreDynamic = createPlatformFactory(platformCore, 'coreDynamic', [
   {provide: COMPILER_OPTIONS, useValue: {}, multi: true},
+  //doing 编译工厂?
   {provide: CompilerFactory, useClass: JitCompilerFactory, deps: [COMPILER_OPTIONS]},
 ]);

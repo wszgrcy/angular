@@ -21,6 +21,7 @@ export const INTERNAL_BROWSER_DYNAMIC_PLATFORM_PROVIDERS: StaticProvider[] = [
   INTERNAL_BROWSER_PLATFORM_PROVIDERS,
   {
     provide: COMPILER_OPTIONS,
+    //doc 一个封装请求资源的get,
     useValue: {providers: [{provide: ResourceLoader, useClass: ResourceLoaderImpl, deps: []}]},
     multi: true
   },

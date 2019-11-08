@@ -11,7 +11,7 @@ import {PLATFORM_ID} from './application_tokens';
 import {Console} from './console';
 import {Injector, StaticProvider} from './di';
 import {TestabilityRegistry} from './testability/testability';
-
+/**一些默认的提供者 */
 const _CORE_PLATFORM_PROVIDERS: StaticProvider[] = [
   // Set a default platform name for platforms that don't set it explicitly.
   {provide: PLATFORM_ID, useValue: 'unknown'},
@@ -22,7 +22,7 @@ const _CORE_PLATFORM_PROVIDERS: StaticProvider[] = [
 
 /**
  * This platform has to be included in any other platform
- *
+ * doc 调用最核心?
  * @publicApi
  */
 export const platformCore = createPlatformFactory(null, 'core', _CORE_PLATFORM_PROVIDERS);
