@@ -45,6 +45,7 @@ export const INJECTOR_IMPL = INJECTOR_IMPL__PRE_R3__;
  * {@example core/di/ts/injector_spec.ts region='injectInjector'}
  *
  * @publicApi
+ * 用于手动获得和添加provider方法的.
  */
 export abstract class Injector {
   static THROW_IF_NOT_FOUND = THROW_IF_NOT_FOUND;

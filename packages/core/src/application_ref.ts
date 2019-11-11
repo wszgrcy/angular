@@ -119,6 +119,7 @@ export function createPlatform(injector: Injector): PlatformRef {
   }
   //doc 拿到平台引用
   _platform = injector.get(PlatformRef);
+  console.log('调用创建平台', _platform);
   const inits = injector.get(PLATFORM_INITIALIZER, null);
   console.log('平台初始化执行脚本?', inits)
   if (inits) inits.forEach((init: any) => init());
@@ -158,6 +159,7 @@ export function createPlatformFactory(
         const injectedProviders: StaticProvider[] =
           providers.concat(extraProviders).concat({ provide: marker, useValue: true });
         //doc 传入上面的所有providers
+        console.log('查看传入的依赖注入提供者', injectedProviders);
         createPlatform(Injector.create({ providers: injectedProviders, name: desc }));
       }
     }
@@ -237,7 +239,9 @@ export class PlatformRef {
   private _destroyListeners: Function[] = [];
   private _destroyed: boolean = false;
 
-  /** @internal */
+  /** @internal
+   * 初始化的时候仅传入Injector
+   */
   constructor(private _injector: Injector) { }
 
   /**
@@ -264,6 +268,7 @@ export class PlatformRef {
    */
   bootstrapModuleFactory<M>(moduleFactory: NgModuleFactory<M>, options?: BootstrapOptions):
     Promise<NgModuleRef<M>> {
+    console.log('bootstrapModuleFactory好像并没有使用场景?', moduleFactory);
     // Note: We need to create the NgZone _before_ we instantiate the module,
     // as instantiating the module creates some providers eagerly.
     // So we create a mini parent injector that just contains the new NgZone and

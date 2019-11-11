@@ -132,6 +132,7 @@ export const COMPILER_PROVIDERS = <StaticProvider[]>[
     provide: HtmlParser,
     useExisting: I18NHtmlParser,
   },
+  //todo 待看
   {
     provide: TemplateParser, deps: [CompilerConfig, CompileReflector,
       Parser, ElementSchemaRegistry,
@@ -177,7 +178,7 @@ export class JitCompilerFactory implements CompilerFactory {
 
   /* @internal */
   constructor(defaultOptions: CompilerOptions[]) {
-    console.log('默认的编译选项');
+    console.log('默认的编译选项,从依赖注入中取得', defaultOptions);
     const compilerOptions: CompilerOptions = {
       useJit: true,
       defaultEncapsulation: ViewEncapsulation.Emulated,
@@ -187,9 +188,11 @@ export class JitCompilerFactory implements CompilerFactory {
     this._defaultOptions = [compilerOptions, ...defaultOptions];
   }
   createCompiler(options: CompilerOptions[] = []): Compiler {
+    console.log('创建编译器,选项', options);
     /**各种多种配置中,最后一个有定义的 */
     const opts = _mergeOptions(this._defaultOptions.concat(options));
     const injector = Injector.create([
+      //todo 没有完全看完
       COMPILER_PROVIDERS,
       {
         provide: CompilerConfig,
@@ -210,10 +213,11 @@ export class JitCompilerFactory implements CompilerFactory {
       },
       opts.providers!
     ]);
+    console.log('获得编译器的所有编译对象', injector);
     return injector.get(Compiler);
   }
 }
-
+/**合并compiler的编译选项 */
 function _mergeOptions(optionsArr: CompilerOptions[]): CompilerOptions {
   return {
     useJit: _lastDefined(optionsArr.map(options => options.useJit)),
