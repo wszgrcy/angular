@@ -45,7 +45,9 @@ let compileNgModuleFactory:
 function compileNgModuleFactory__PRE_R3__<M>(
   injector: Injector, options: CompilerOptions,
   moduleType: Type<M>): Promise<NgModuleFactory<M>> {
+  /**用依赖注入中拿到编译器工厂 */
   const compilerFactory: CompilerFactory = injector.get(CompilerFactory);
+  /**创建编译器 */
   const compiler = compilerFactory.createCompiler([options]);
   return compiler.compileModuleAsync(moduleType);
 }
@@ -268,7 +270,7 @@ export class PlatformRef {
    */
   bootstrapModuleFactory<M>(moduleFactory: NgModuleFactory<M>, options?: BootstrapOptions):
     Promise<NgModuleRef<M>> {
-    console.log('bootstrapModuleFactory好像并没有使用场景?', moduleFactory);
+    console.log('初始化被调用bootstrapModuleFactory', moduleFactory);
     // Note: We need to create the NgZone _before_ we instantiate the module,
     // as instantiating the module creates some providers eagerly.
     // So we create a mini parent injector that just contains the new NgZone and
@@ -401,7 +403,7 @@ function _callAndReportToErrorHandler(
     throw e;
   }
 }
-
+/**把参数合并到一个数组中,以最后一个为优先 */
 function optionsReducer<T extends Object>(dst: any, objs: T | T[]): T {
   if (Array.isArray(objs)) {
     dst = objs.reduce(optionsReducer, dst);
