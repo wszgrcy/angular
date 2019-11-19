@@ -114,9 +114,9 @@ export class NgZone {
    * Notifies that an error has been delivered.
    */
   readonly onError: EventEmitter<any> = new EventEmitter(false);
-
+  /**单实例 */
   constructor({ enableLongStackTrace = false }) {
-    console.log('是否是单实例?ngZone');
+    // console.log('是否是单实例?ngZone');
     if (typeof Zone == 'undefined') {
       throw new Error(`In this configuration Angular requires Zone.js`);
     }
