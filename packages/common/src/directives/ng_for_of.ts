@@ -130,6 +130,7 @@ export class NgForOf<T> implements DoCheck {
    * [template input variable](guide/structural-directives#template-input-variable).
    */
   @Input()
+  /**传入列表,或可迭代对象 */
   set ngForOf(ngForOf: NgIterable<T>) {
     console.log('ngForOf输入值', ngForOf)
     this._ngForOf = ngForOf;
@@ -216,6 +217,7 @@ export class NgForOf<T> implements DoCheck {
     }
     if (this._differ) {
       console.log('判断是否变更', this._ngForOf);
+      //doc 和keyvalue管道用的同一个策略
       const changes = this._differ.diff(this._ngForOf);
       if (changes) this._applyChanges(changes);
     }

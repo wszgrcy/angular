@@ -111,6 +111,7 @@ export class NgProbeToken {
  *
  * @publicApi
  * 返回的平台是从依赖注入中拿到的
+ * 这里的PlatformRef是从core中拿到的,其他的里面都没有
  */
 export function createPlatform(injector: Injector): PlatformRef {
   //doc平台被销毁或者不允许多平台?
@@ -121,9 +122,10 @@ export function createPlatform(injector: Injector): PlatformRef {
   }
   //todo 拿到平台引用,需要找到注入的位置
   _platform = injector.get(PlatformRef);
-  console.log('调用创建平台', _platform);
+  // console.log('调用创建平台', _platform);
+  /**initDomAdapter函数 */
   const inits = injector.get(PLATFORM_INITIALIZER, null);
-  console.log('平台初始化执行脚本?', inits)
+  // console.log('平台初始化执行脚本?', inits)
   if (inits) inits.forEach((init: any) => init());
   return _platform;
 }
@@ -142,6 +144,7 @@ export function createPlatformFactory(
     PlatformRef {
   /**关于平台的一个描述 */
   const desc = `Platform: ${name}`;
+  /**名字的toekn */
   const marker = new InjectionToken(desc);
   return (extraProviders: StaticProvider[] = []) => {
     /**当前平台的引用 */
@@ -160,8 +163,10 @@ export function createPlatformFactory(
         /**默认给的,加上调用时传入的,加上desc(内联貌似拿不到) */
         const injectedProviders: StaticProvider[] =
           providers.concat(extraProviders).concat({ provide: marker, useValue: true });
-        //doc 传入上面的所有providers
-        console.log('查看传入的依赖注入提供者', injectedProviders);
+        //doc 传入上面的所有providers 
+        /**
+         * 浏览器启动后,多层调用,最后传入,顺序基本是core+cored+browser+cored+core
+         */
         createPlatform(Injector.create({ providers: injectedProviders, name: desc }));
       }
     }
@@ -267,10 +272,11 @@ export class PlatformRef {
    *
    * let moduleRef = platformBrowser().bootstrapModuleFactory(MyModuleNgFactory);
    * ```
+   * ? 模块工厂是怎么来的
    */
-  bootstrapModuleFactory<M>(moduleFactory: NgModuleFactory<M>, options?: BootstrapOptions):
+  bootstrapModuleFactory<M>(/**使用模块的工厂,用于创建模块*/moduleFactory: NgModuleFactory<M>, options?: BootstrapOptions):
     Promise<NgModuleRef<M>> {
-    console.log('初始化被调用bootstrapModuleFactory', moduleFactory);
+    // console.log('初始化被调用bootstrapModuleFactory', moduleFactory);
     // Note: We need to create the NgZone _before_ we instantiate the module,
     // as instantiating the module creates some providers eagerly.
     // So we create a mini parent injector that just contains the new NgZone and

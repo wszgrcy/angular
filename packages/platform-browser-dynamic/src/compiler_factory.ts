@@ -177,8 +177,9 @@ export class JitCompilerFactory implements CompilerFactory {
   private _defaultOptions: CompilerOptions[];
 
   /* @internal */
-  constructor(defaultOptions: CompilerOptions[]) {
-    console.log('默认的编译选项,从依赖注入中取得', defaultOptions);
+  constructor(/**里面第二个数组里面有ResourceLoader*/defaultOptions: CompilerOptions[]) {
+    // console.log('默认的编译选项,从依赖注入中取得', defaultOptions);
+
     const compilerOptions: CompilerOptions = {
       useJit: true,
       defaultEncapsulation: ViewEncapsulation.Emulated,
@@ -187,8 +188,8 @@ export class JitCompilerFactory implements CompilerFactory {
 
     this._defaultOptions = [compilerOptions, ...defaultOptions];
   }
-  createCompiler(options: CompilerOptions[] = []): Compiler {
-    console.log('创建编译器,选项', options);
+  createCompiler(/**里面有空对象*/options: CompilerOptions[] = []): Compiler {
+    // console.log('创建编译器,选项', options);
     /**各种多种配置中,最后一个有定义的 */
     const opts = _mergeOptions(this._defaultOptions.concat(options));
     const injector = Injector.create([
@@ -213,7 +214,7 @@ export class JitCompilerFactory implements CompilerFactory {
       },
       opts.providers!
     ]);
-    console.log('获得编译器的所有编译对象', injector);
+    // console.log('获得编译器的所有编译对象', injector);
     return injector.get(Compiler);
   }
 }
