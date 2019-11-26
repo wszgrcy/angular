@@ -45,7 +45,7 @@ export function forwardRef(forwardRefFn: ForwardRefFn): Type<any> {
 
 /**
  * Lazily retrieves the reference value from a forwardRef.
- *
+ * 看一看这个函数是否是有向前引用,
  * Acts as the identity function when given a non-forward-ref value.
  *
  * @usageNotes

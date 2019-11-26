@@ -119,7 +119,7 @@ export function createPlatform(injector: Injector): PlatformRef {
     throw new Error(
       'There can be only one platform. Destroy the previous one to create a new one.');
   }
-  //doc 拿到平台引用
+  //todo 拿到平台引用,需要找到注入的位置
   _platform = injector.get(PlatformRef);
   console.log('调用创建平台', _platform);
   const inits = injector.get(PLATFORM_INITIALIZER, null);
