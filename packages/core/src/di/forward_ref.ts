@@ -36,6 +36,8 @@ const __forward_ref__ = getClosureSafeProperty({__forward_ref__: getClosureSafeP
  * ### Example
  * {@example core/di/ts/forward_ref/forward_ref_spec.ts region='forward_ref'}
  * @publicApi
+ * 允许引用尚未定义的引用
+ * 调用后加入一个标识
  */
 export function forwardRef(forwardRefFn: ForwardRefFn): Type<any> {
   (<any>forwardRefFn).__forward_ref__ = forwardRef;
@@ -45,7 +47,7 @@ export function forwardRef(forwardRefFn: ForwardRefFn): Type<any> {
 
 /**
  * Lazily retrieves the reference value from a forwardRef.
- * 看一看这个函数是否是有向前引用,
+ * 
  * Acts as the identity function when given a non-forward-ref value.
  *
  * @usageNotes
@@ -55,6 +57,7 @@ export function forwardRef(forwardRefFn: ForwardRefFn): Type<any> {
  *
  * @see `forwardRef`
  * @publicApi
+ * 如果是引用了没定义的类型,那么在这里实现,否则直接返回
  */
 export function resolveForwardRef<T>(type: T): T {
   const fn: any = type;

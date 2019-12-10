@@ -15,7 +15,7 @@ import {TestabilityRegistry} from './testability/testability';
 const _CORE_PLATFORM_PROVIDERS: StaticProvider[] = [
   // Set a default platform name for platforms that don't set it explicitly.
   {provide: PLATFORM_ID, useValue: 'unknown'},
-  //todo 不理解,这么写应该无法初始化,
+  //doc 内部来说,这个是可以初始化的,但是这种写法作用于NgModule上无效
   {provide: PlatformRef, deps: [Injector]},
   {provide: TestabilityRegistry, deps: []},
   {provide: Console, deps: []},
@@ -26,4 +26,4 @@ const _CORE_PLATFORM_PROVIDERS: StaticProvider[] = [
  * doc 调用最核心?
  * @publicApi
  */
-export const platformCore = createPlatformFactory(null, 'core', _CORE_PLATFORM_PROVIDERS);
+export const platformCore = createPlatformFactory(null, 'core', _CORE_PLATFORM_PROVIDERS); 

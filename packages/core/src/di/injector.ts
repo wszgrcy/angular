@@ -103,7 +103,7 @@ export abstract class Injector {
 }
 
 
-
+/**useExisting使用 */
 const IDENT = function <T>(value: T): T {
   return value;
 };
@@ -116,13 +116,15 @@ const MULTI_PROVIDER_FN = function (): any[] {
 };
 /**选项标志 */
 const enum OptionFlags {
-  Optional = 1 << 0,
-  CheckSelf = 1 << 1,
-  CheckParent = 1 << 2,
+  Optional = 1 << 0,//0b001
+  CheckSelf = 1 << 1,//0b010
+  CheckParent = 1 << 2,//0b100
   Default = CheckSelf | CheckParent
 }
 const NO_NEW_LINE = 'ɵ';
-
+/**
+ * 
+ */
 export class StaticInjector implements Injector {
   readonly parent: Injector;
   readonly source: string | null;
@@ -130,10 +132,11 @@ export class StaticInjector implements Injector {
   private _records: Map<any, Record>;
 
   constructor(
-    providers: StaticProvider[], parent: Injector = Injector.NULL,/**外界赋值是name */ source: string | null = null) {
+    providers: StaticProvider[], parent: Injector = Injector.NULL,/**来源，从哪里初始化的? */ source: string | null = null) {
     this.parent = parent;
     this.source = source;
     const records = this._records = new Map<any, Record>();
+    //doc 每次初始化时先把这两个加进去
     records.set(
       Injector, <Record>{ token: Injector, fn: IDENT, deps: EMPTY, value: this, useNew: false });
     records.set(
@@ -179,7 +182,6 @@ interface DependencyRecord {
 function resolveProvider(provider: SupportedProvider): Record {
   /**依赖? */
   const deps = computeDeps(provider);
-  console.log('deps依赖', deps)
   /**通过工厂,类,直传 */
   let fn: Function = IDENT;
   let value: any = EMPTY;
@@ -192,6 +194,7 @@ function resolveProvider(provider: SupportedProvider): Record {
   } else if ((provider as FactoryProvider).useFactory) {
     fn = (provider as FactoryProvider).useFactory;
   } else if ((provider as ExistingProvider).useExisting) {
+    // console.log('useExisting', provider)
     // Just use IDENT
   } else if ((provider as StaticClassProvider).useClass) {
     useNew = true;
@@ -204,16 +207,20 @@ function resolveProvider(provider: SupportedProvider): Record {
       'StaticProvider does not have [useValue|useFactory|useExisting|useClass] or [provide] is not newable',
       provider);
   }
+  // console.log(deps, fn, useNew, value)
   return { deps, fn, useNew, value };
 }
 
 function multiProviderMixError(token: any) {
   return staticError('Cannot mix multi providers and regular providers', token);
 }
-
+/**递归处理提供者
+ * 
+ */
 function recursivelyProcessProviders(records: Map<any, Record>, provider: StaticProvider) {
   if (provider) {
     provider = resolveForwardRef(provider);
+    //doc 如果传入的是数组,递归处理
     if (provider instanceof Array) {
       // if we have an array recurse into the array
       for (let i = 0; i < provider.length; i++) {
@@ -237,11 +244,12 @@ function recursivelyProcessProviders(records: Map<any, Record>, provider: Static
         // This is a multi provider.
         let multiProvider: Record | undefined = records.get(token);
         if (multiProvider) {
-          //todo 未知
+          //doc 多提供者使用的fn是定制的,参数保存在deps中
           if (multiProvider.fn !== MULTI_PROVIDER_FN) {
             throw multiProviderMixError(token);
           }
         } else {
+          //doc 没有的话统一新增一个
           // Create a placeholder factory which will look up the constituents of the multi provider.
           records.set(token, multiProvider = <Record>{
             token: provider.provide,
@@ -251,6 +259,7 @@ function recursivelyProcessProviders(records: Map<any, Record>, provider: Static
             value: EMPTY
           });
         }
+        //doc 不管是新增的还是之前有的统一往deps增加
         // Treat the provider as the token.
         token = provider;
         multiProvider.deps.push({ token, options: OptionFlags.Default });
@@ -265,7 +274,7 @@ function recursivelyProcessProviders(records: Map<any, Record>, provider: Static
     }
   }
 }
-
+/**解析token */
 function tryResolveToken(
   token: any, record: Record | undefined, records: Map<any, Record>, parent: Injector,
   notFoundValue: any, flags: InjectFlags): any {
@@ -277,6 +286,7 @@ function tryResolveToken(
       e = new Error(e);
     }
     const path: any[] = e[NG_TEMP_TOKEN_PATH] = e[NG_TEMP_TOKEN_PATH] || [];
+    // console.log('循环依赖', path, e, NG_TEMP_TOKEN_PATH)
     path.unshift(token);
     if (record && record.value == CIRCULAR) {
       // Reset the Circular flag.
@@ -285,7 +295,7 @@ function tryResolveToken(
     throw e;
   }
 }
-
+/**get调用 */
 function resolveToken(
   token: any, record: Record | undefined, records: Map<any, Record>, parent: Injector,
   notFoundValue: any, flags: InjectFlags): any {
@@ -303,6 +313,7 @@ function resolveToken(
       let useNew = record.useNew;
       let fn = record.fn;
       let depRecords = record.deps;
+      // console.log('依赖记录', depRecords)
       let deps = EMPTY;
       if (depRecords.length) {
         deps = [];
@@ -327,7 +338,7 @@ function resolveToken(
         }
       }
       //todo 赋值?
-      console.log(value, fn);
+      // console.log(record, deps);
       record.value = value = useNew ? new (fn as any)(...deps) : fn.apply(obj, deps);
     }
   } else if (!(flags & InjectFlags.Self)) {
@@ -338,16 +349,18 @@ function resolveToken(
 /**计算参数?
  * 不止计算参数,其实还会判断这个provider是不是符合规范
  * todo 参数还可以传递一些选项,optinal之类的需要测试
+ * 把deps数组中的值+装饰器的一些选项(可以在deps数组中使用装饰器)
  */
 function computeDeps(provider: StaticProvider): DependencyRecord[] {
   let deps: DependencyRecord[] = EMPTY;
   const providerDeps: any[] =
     (provider as ExistingProvider & StaticClassProvider & ConstructorProvider).deps;
-  //doc 如果depts里面有值
+  //doc 如果deps里面有值
   if (providerDeps && providerDeps.length) {
     deps = [];
     for (let i = 0; i < providerDeps.length; i++) {
       let options = OptionFlags.Default;
+      /**deps数组中保存着数组 */
       let token = resolveForwardRef(providerDeps[i]);
       if (token instanceof Array) {
         for (let j = 0, annotations = token; j < annotations.length; j++) {

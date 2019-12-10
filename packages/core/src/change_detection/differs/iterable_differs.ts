@@ -6,10 +6,10 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {ɵɵdefineInjectable} from '../../di/interface/defs';
-import {StaticProvider} from '../../di/interface/provider';
-import {Optional, SkipSelf} from '../../di/metadata';
-import {DefaultIterableDifferFactory} from '../differs/default_iterable_differ';
+import { ɵɵdefineInjectable } from '../../di/interface/defs';
+import { StaticProvider } from '../../di/interface/provider';
+import { Optional, SkipSelf } from '../../di/metadata';
+import { DefaultIterableDifferFactory } from '../differs/default_iterable_differ';
 
 
 
@@ -18,7 +18,7 @@ import {DefaultIterableDifferFactory} from '../differs/default_iterable_differ';
  *
  * @publicApi
  */
-export type NgIterable<T> = Array<T>| Iterable<T>;
+export type NgIterable<T> = Array<T> | Iterable<T>;
 
 /**
  * A strategy for tracking changes over time to an iterable. Used by {@link NgForOf} to
@@ -34,7 +34,7 @@ export interface IterableDiffer<V> {
    * @returns an object describing the difference. The return value is only valid until the next
    * `diff()` invocation.
    */
-  diff(object: NgIterable<V>): IterableChanges<V>|null;
+  diff(object: NgIterable<V>): IterableChanges<V> | null;
 }
 
 /**
@@ -67,9 +67,9 @@ export interface IterableChanges<V> {
    *        of the item, after applying the operations up to this point.
    */
   forEachOperation(
-      fn:
-          (record: IterableChangeRecord<V>, previousIndex: number|null,
-           currentIndex: number|null) => void): void;
+    fn:
+      (record: IterableChangeRecord<V>, previousIndex: number | null,
+        currentIndex: number | null) => void): void;
 
   /**
    * Iterate over changes in the order of original `Iterable` showing where the original items
@@ -98,10 +98,10 @@ export interface IterableChanges<V> {
  */
 export interface IterableChangeRecord<V> {
   /** Current index of the item in `Iterable` or null if removed. */
-  readonly currentIndex: number|null;
+  readonly currentIndex: number | null;
 
   /** Previous index of the item in `Iterable` or null if added. */
-  readonly previousIndex: number|null;
+  readonly previousIndex: number | null;
 
   /** The item. */
   readonly item: V;
@@ -114,7 +114,7 @@ export interface IterableChangeRecord<V> {
  * @deprecated v4.0.0 - Use IterableChangeRecord instead.
  * @publicApi
  */
-export interface CollectionChangeRecord<V> extends IterableChangeRecord<V> {}
+export interface CollectionChangeRecord<V> extends IterableChangeRecord<V> { }
 
 /**
  * An optional function passed into the `NgForOf` directive that defines how to track
@@ -140,6 +140,7 @@ export interface IterableDifferFactory {
  * A repository of different iterable diffing strategies used by NgFor, NgClass, and others.
  *
  * @publicApi
+ * 迭代器对比器
  */
 export class IterableDiffers {
   /** @nocollapse */
@@ -153,7 +154,10 @@ export class IterableDiffers {
    * @deprecated v4.0.0 - Should be private
    */
   factories: IterableDifferFactory[];
-  constructor(factories: IterableDifferFactory[]) { this.factories = factories; }
+  constructor(factories: IterableDifferFactory[]) {
+    console.log('迭代器工厂', factories)
+    this.factories = factories;
+  }
 
   static create(factories: IterableDifferFactory[], parent?: IterableDiffers): IterableDiffers {
     if (parent != null) {
@@ -202,12 +206,14 @@ export class IterableDiffers {
   }
 
   find(iterable: any): IterableDifferFactory {
+    /**知道支持这个列表的迭代对比工厂? */
     const factory = this.factories.find(f => f.supports(iterable));
+    console.log('查看工厂', factory)
     if (factory != null) {
       return factory;
     } else {
       throw new Error(
-          `Cannot find a differ supporting object '${iterable}' of type '${getTypeNameForDebugging(iterable)}'`);
+        `Cannot find a differ supporting object '${iterable}' of type '${getTypeNameForDebugging(iterable)}'`);
     }
   }
 }

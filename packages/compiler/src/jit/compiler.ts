@@ -36,6 +36,7 @@ export interface ModuleWithComponentFactories {
  * @security  When compiling templates at runtime, you must ensure that the entire template comes
  * from a trusted source. Attacker-controlled data introduced by a template could expose your
  * application to XSS risks.  For more detail, see the [Security Guide](http://g.co/ng/security).
+ * todo 这里需要看
  */
 export class JitCompiler {
   private _compiledTemplateCache = new Map<Type, CompiledTemplate>();

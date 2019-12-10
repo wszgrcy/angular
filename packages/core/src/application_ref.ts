@@ -125,7 +125,6 @@ export function createPlatform(injector: Injector): PlatformRef {
   // console.log('调用创建平台', _platform);
   /**initDomAdapter函数 */
   const inits = injector.get(PLATFORM_INITIALIZER, null);
-  // console.log('平台初始化执行脚本?', inits)
   if (inits) inits.forEach((init: any) => init());
   return _platform;
 }
@@ -137,7 +136,7 @@ export function createPlatform(injector: Injector): PlatformRef {
  * @publicApi
  */
 export function createPlatformFactory(
-  parentPlatformFactory: ((extraProviders?: StaticProvider[]) => PlatformRef) | null,
+  /**父平台工厂*/parentPlatformFactory: ((extraProviders?: StaticProvider[]) => PlatformRef) | null,
     /**传入的名字*/name: string,
   providers: StaticProvider[] = [])
   : (extraProviders?: StaticProvider[]) =>
@@ -150,7 +149,6 @@ export function createPlatformFactory(
     /**当前平台的引用 */
     let platform = getPlatform();
     //doc 如果没有平台或者是多平台?
-    console.log(platform && platform!.injector.get(ALLOW_MULTIPLE_PLATFORMS, false));
     if (!platform || platform.injector.get(ALLOW_MULTIPLE_PLATFORMS, false)) {
       //doc 如果有父工厂
       if (parentPlatformFactory) {
@@ -165,7 +163,7 @@ export function createPlatformFactory(
           providers.concat(extraProviders).concat({ provide: marker, useValue: true });
         //doc 传入上面的所有providers 
         /**
-         * 浏览器启动后,多层调用,最后传入,顺序基本是core+cored+browser+cored+core
+         * 这里就是获得平台引用的唯一地方,平台引用从依赖注入中拿到浏览器启动后,多层调用,最后传入,顺序基本是core+cored+browser+cored+core
          */
         createPlatform(Injector.create({ providers: injectedProviders, name: desc }));
       }
@@ -211,6 +209,7 @@ export function destroyPlatform(): void {
  * @publicApi
  */
 export function getPlatform(): PlatformRef | null {
+  console.log('获得平台',_platform)
   return _platform && !_platform.destroyed ? _platform : null;
 }
 
@@ -237,7 +236,7 @@ export interface BootstrapOptions {
  *
  * A page's platform is initialized implicitly when a platform is created via a platform factory
  * (e.g. {@link platformBrowser}), or explicitly by calling the {@link createPlatform} function.
- *
+ * 用于启动的第一个
  * @publicApi
  */
 @Injectable()
@@ -276,7 +275,7 @@ export class PlatformRef {
    */
   bootstrapModuleFactory<M>(/**使用模块的工厂,用于创建模块*/moduleFactory: NgModuleFactory<M>, options?: BootstrapOptions):
     Promise<NgModuleRef<M>> {
-    // console.log('初始化被调用bootstrapModuleFactory', moduleFactory);
+    console.log('初始化被调用bootstrapModuleFactory', moduleFactory, options);
     // Note: We need to create the NgZone _before_ we instantiate the module,
     // as instantiating the module creates some providers eagerly.
     // So we create a mini parent injector that just contains the new NgZone and
@@ -331,7 +330,7 @@ export class PlatformRef {
    *
    */
   bootstrapModule<M>(
-    moduleType: Type<M>, compilerOptions: (CompilerOptions & BootstrapOptions) |
+  /**第一个模块 */ moduleType: Type<M>,/**第二个参数,可以省略 */ compilerOptions: (CompilerOptions & BootstrapOptions) |
       Array<CompilerOptions & BootstrapOptions> = []): Promise<NgModuleRef<M>> {
     const options = optionsReducer({}, compilerOptions);
     return compileNgModuleFactory(this.injector, options, moduleType)

@@ -130,9 +130,8 @@ export class NgForOf<T> implements DoCheck {
    * [template input variable](guide/structural-directives#template-input-variable).
    */
   @Input()
-  /**传入列表,或可迭代对象 */
+  /**传入[列表],或可迭代对象 */
   set ngForOf(ngForOf: NgIterable<T>) {
-    console.log('ngForOf输入值', ngForOf)
     this._ngForOf = ngForOf;
     this._ngForOfDirty = true;
   }
@@ -155,6 +154,7 @@ export class NgForOf<T> implements DoCheck {
    */
   @Input()
   set ngForTrackBy(fn: TrackByFunction<T>) {
+    // console.log('传入追踪值', fn)
     if (isDevMode() && fn != null && typeof fn !== 'function') {
       // TODO(vicb): use a log service once there is a public one available
       if (<any>console && <any>console.warn) {
@@ -169,7 +169,9 @@ export class NgForOf<T> implements DoCheck {
   get ngForTrackBy(): TrackByFunction<T> { return this._trackByFn; }
 
   // TODO(issue/24571): remove '!'.
+  /**列表 */
   private _ngForOf !: NgIterable<T>;
+  /**每检测一遍,归为false */
   private _ngForOfDirty: boolean = true;
   private _differ: IterableDiffer<T> | null = null;
   // TODO(issue/24571): remove '!'.
@@ -185,7 +187,7 @@ export class NgForOf<T> implements DoCheck {
    */
   @Input()
   set ngForTemplate(value: TemplateRef<NgForOfContext<T>>) {
-    console.log('应该是指令附加部分的标签', value)
+    // console.log('应该是指令附加部分的标签', value)
     // TODO(TS2.1): make TemplateRef<Partial<NgForRowOf<T>>> once we move to TS v2.1
     // The current type is too restrictive; a template that just uses index, for example,
     // should be acceptable.
@@ -202,13 +204,15 @@ export class NgForOf<T> implements DoCheck {
     if (this._ngForOfDirty) {
       this._ngForOfDirty = false;
       // React on ngForOf changes only once all inputs have been initialized
+      /**列表 */
       const value = this._ngForOf;
-      console.log('判断', this._differ, value);
+      // console.log('判断', this._differ, value);
       if (!this._differ && value) {
         try {
-          console.log('尝试创建追踪策略');
+          // console.log('尝试创建追踪策略');
+          //doc 默认的列表对比策略
           this._differ = this._differs.find(value).create(this.ngForTrackBy);
-          console.log(this._differ);
+          // console.log(this._differ);
         } catch {
           throw new Error(
             `Cannot find a differ supporting object '${value}' of type '${getTypeName(value)}'. NgFor only supports binding to Iterables such as Arrays.`);
@@ -216,7 +220,7 @@ export class NgForOf<T> implements DoCheck {
       }
     }
     if (this._differ) {
-      console.log('判断是否变更', this._ngForOf);
+      // console.log('判断是否变更', this._ngForOf);
       //doc 和keyvalue管道用的同一个策略
       const changes = this._differ.diff(this._ngForOf);
       if (changes) this._applyChanges(changes);

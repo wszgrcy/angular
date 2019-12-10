@@ -30,7 +30,7 @@ const _NO_RESOURCE_LOADER: ResourceLoader = {
 };
 
 const baseHtmlParser = new InjectionToken('HtmlParser');
-
+/**这个才是jit时候使用的 */
 export class CompilerImpl implements Compiler {
   private _delegate: JitCompiler;
   public readonly injector: Injector;
@@ -40,6 +40,8 @@ export class CompilerImpl implements Compiler {
     ngModuleCompiler: NgModuleCompiler, summaryResolver: SummaryResolver<Type<any>>,
     compileReflector: CompileReflector, jitEvaluator: JitEvaluator,
     compilerConfig: CompilerConfig, console: Console) {
+    window.console.trace()
+    console.log('这里实现了Compiler,仅开发时使用')
     this._delegate = new JitCompiler(
       _metadataResolver, templateParser, styleCompiler, viewCompiler, ngModuleCompiler,
       summaryResolver, compileReflector, jitEvaluator, compilerConfig, console,
@@ -92,12 +94,14 @@ export class CompilerImpl implements Compiler {
  * 一个提供给`JitCompiler`的设置,用于模板编译
  */
 export const COMPILER_PROVIDERS = <StaticProvider[]>[
+  //todo compiler
   { provide: CompileReflector, useValue: new JitReflector() },
   /**清除资源loader? */
   { provide: ResourceLoader, useValue: _NO_RESOURCE_LOADER },
   /**
    * todo ! 值提供不设置值? */
   { provide: JitSummaryResolver, deps: [] },
+  //todo compiler
   { provide: SummaryResolver, useExisting: JitSummaryResolver },
   { provide: Console, deps: [] },
   /**
@@ -132,15 +136,17 @@ export const COMPILER_PROVIDERS = <StaticProvider[]>[
     provide: HtmlParser,
     useExisting: I18NHtmlParser,
   },
-  //todo 待看
+  //todo compiler
   {
     provide: TemplateParser, deps: [CompilerConfig, CompileReflector,
       Parser, ElementSchemaRegistry,
       I18NHtmlParser, Console]
   },
+  //todo compiler
   { provide: JitEvaluator, useClass: JitEvaluator, deps: [] },
   { provide: DirectiveNormalizer, deps: [ResourceLoader, UrlResolver, HtmlParser, CompilerConfig] },
   {
+    //todo compiler依赖注入用
     provide: CompileMetadataResolver, deps: [CompilerConfig, HtmlParser, NgModuleResolver,
       DirectiveResolver, PipeResolver,
       SummaryResolver,
@@ -151,9 +157,13 @@ export const COMPILER_PROVIDERS = <StaticProvider[]>[
       [Optional, ERROR_COLLECTOR_TOKEN]]
   },
   DEFAULT_PACKAGE_URL_PROVIDER,
+  //todo compiler
   { provide: StyleCompiler, deps: [UrlResolver] },
+  //todo compiler
   { provide: ViewCompiler, deps: [CompileReflector] },
+  //todo compiler
   { provide: NgModuleCompiler, deps: [CompileReflector] },
+  //todo compiler
   { provide: CompilerConfig, useValue: new CompilerConfig() },
   {
     provide: Compiler, useClass: CompilerImpl, deps: [Injector, CompileMetadataResolver,
@@ -172,6 +182,7 @@ export const COMPILER_PROVIDERS = <StaticProvider[]>[
 
 /**
  * @publicApi
+ * 只有jit时使用
  */
 export class JitCompilerFactory implements CompilerFactory {
   private _defaultOptions: CompilerOptions[];
@@ -189,9 +200,11 @@ export class JitCompilerFactory implements CompilerFactory {
     this._defaultOptions = [compilerOptions, ...defaultOptions];
   }
   createCompiler(/**里面有空对象*/options: CompilerOptions[] = []): Compiler {
-    // console.log('创建编译器,选项', options);
+
+    console.log('dev?创建编译器,选项', options);
     /**各种多种配置中,最后一个有定义的 */
     const opts = _mergeOptions(this._defaultOptions.concat(options));
+    console.log('工厂创建编译器后又在依赖注入中加入了一些',COMPILER_PROVIDERS)
     const injector = Injector.create([
       //todo 没有完全看完
       COMPILER_PROVIDERS,
@@ -214,7 +227,7 @@ export class JitCompilerFactory implements CompilerFactory {
       },
       opts.providers!
     ]);
-    // console.log('获得编译器的所有编译对象', injector);
+    console.log('获得编译器的所有编译对象', injector);
     return injector.get(Compiler);
   }
 }

@@ -13,10 +13,12 @@ declare const Symbol: any;
 let _symbolIterator: any = null;
 export function getSymbolIterator(): string|symbol {
   if (!_symbolIterator) {
+    // console.log('全局',_global)
     const Symbol = _global['Symbol'];
     if (Symbol && Symbol.iterator) {
       _symbolIterator = Symbol.iterator;
     } else {
+      // 补丁
       // es6-shim specific logic
       const keys = Object.getOwnPropertyNames(Map.prototype);
       for (let i = 0; i < keys.length; ++i) {

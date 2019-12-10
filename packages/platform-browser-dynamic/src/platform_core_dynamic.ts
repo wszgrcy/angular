@@ -18,4 +18,5 @@ export const platformCoreDynamic = createPlatformFactory(platformCore, 'coreDyna
   {provide: COMPILER_OPTIONS, useValue: {}, multi: true},
   //doing 编译工厂?,选项是在类中使用,这个应该可以自己传?
   {provide: CompilerFactory, useClass: JitCompilerFactory, deps: [COMPILER_OPTIONS]},
-]);
+]); 
+ 

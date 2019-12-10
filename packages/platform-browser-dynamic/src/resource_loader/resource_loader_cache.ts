@@ -6,8 +6,8 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {ResourceLoader} from '@angular/compiler';
-import {ɵglobal as global} from '@angular/core';
+import { ResourceLoader } from '@angular/compiler';
+import { ɵglobal as global } from '@angular/core';
 
 /**
  * An implementation of ResourceLoader that uses a template cache to avoid doing an actual
@@ -17,9 +17,10 @@ import {ɵglobal as global} from '@angular/core';
  * via a separate mechanism.
  *
  * @publicApi
+ * 资源缓存的loader用于拿到某些资源的缓存(promise)
  */
 export class CachedResourceLoader extends ResourceLoader {
-  private _cache: {[url: string]: string};
+  private _cache: { [url: string]: string };
 
   constructor() {
     super();
@@ -31,10 +32,11 @@ export class CachedResourceLoader extends ResourceLoader {
 
   get(url: string): Promise<string> {
     if (this._cache.hasOwnProperty(url)) {
+      console.log('缓存', url, this._cache[url])
       return Promise.resolve(this._cache[url]);
     } else {
       return <Promise<any>>Promise.reject(
-          'CachedResourceLoader: Did not find cached template for ' + url);
+        'CachedResourceLoader: Did not find cached template for ' + url);
     }
   }
 }

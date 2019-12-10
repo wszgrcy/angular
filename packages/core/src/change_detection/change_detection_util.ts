@@ -63,9 +63,10 @@ export class WrappedValue {
   /** Returns true if `value` is a wrapped value. */
   static isWrapped(value: any): value is WrappedValue { return value instanceof WrappedValue; }
 }
-
+/**判断是否是一个类迭代器 */
 export function isListLikeIterable(obj: any): boolean {
   if (!isJsObject(obj)) return false;
+  // 是数组,不是Map实例化并且
   return Array.isArray(obj) ||
       (!(obj instanceof Map) &&      // JS Map are iterables but return entries as [k, v]
        getSymbolIterator() in obj);  // JS Iterable have a Symbol.iterator prop
@@ -98,7 +99,7 @@ export function iterateListLike(obj: any, fn: (p: any) => any) {
     }
   }
 }
-
+/**判断是否是一个js对象 */
 export function isJsObject(o: any): boolean {
   return o !== null && (typeof o === 'function' || typeof o === 'object');
 }
