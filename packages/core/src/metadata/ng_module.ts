@@ -343,13 +343,14 @@ export const NgModule: NgModuleDecorator = makeDecorator(
  * @publicApi
  */
 export interface DoBootstrap { ngDoBootstrap(appRef: ApplicationRef): void; }
-
+/**加到装饰器中? */
 function preR3NgModuleCompile(moduleType: Type<any>, metadata?: NgModule): void {
   let imports = (metadata && metadata.imports) || [];
   if (metadata && metadata.exports) {
+    //doc 只要exports,一定自动imports
     imports = [...imports, metadata.exports];
   }
-
+//doc 加入到服务中让他自动初始化?
   (moduleType as InjectorType<any>).ngInjectorDef = ɵɵdefineInjector({
     factory: convertInjectableProviderToFactory(moduleType, {useClass: moduleType}),
     providers: metadata && metadata.providers,

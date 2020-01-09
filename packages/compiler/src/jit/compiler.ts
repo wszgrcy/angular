@@ -105,6 +105,8 @@ export class JitCompiler {
   }
 
   private _compileModuleAndComponents(moduleType: Type, isSync: boolean): SyncAsync<object> {
+    console.log('私有编译模块和组件',moduleType)
+    //doc 先载入模块再编译组件,最后编译模块
     return SyncAsync.then(this._loadModules(moduleType, isSync), () => {
       this._compileComponents(moduleType, null);
       return this._compileModule(moduleType);
@@ -122,7 +124,7 @@ export class JitCompiler {
       };
     });
   }
-
+/**编译模块 */
   private _loadModules(mainModule: any, isSync: boolean): SyncAsync<any> {
     const loading: Promise<any>[] = [];
     const mainNgModule = this._metadataResolver.getNgModuleMetadata(mainModule) !;

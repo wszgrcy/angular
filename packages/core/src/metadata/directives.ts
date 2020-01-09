@@ -633,7 +633,6 @@ export interface Pipe {
 export const Pipe: PipeDecorator = makeDecorator(
   'Pipe', (p: Pipe) => ({ pure: true, ...p }), undefined, undefined,
   (type: Type<any>, meta: Pipe) => SWITCH_COMPILE_PIPE(type, meta));
-console.dir(Pipe)
 
 /**
  * @publicApi

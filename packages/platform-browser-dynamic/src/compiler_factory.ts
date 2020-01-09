@@ -40,8 +40,6 @@ export class CompilerImpl implements Compiler {
     ngModuleCompiler: NgModuleCompiler, summaryResolver: SummaryResolver<Type<any>>,
     compileReflector: CompileReflector, jitEvaluator: JitEvaluator,
     compilerConfig: CompilerConfig, console: Console) {
-    window.console.trace()
-    console.log('这里实现了Compiler,仅开发时使用')
     this._delegate = new JitCompiler(
       _metadataResolver, templateParser, styleCompiler, viewCompiler, ngModuleCompiler,
       summaryResolver, compileReflector, jitEvaluator, compilerConfig, console,

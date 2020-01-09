@@ -6,13 +6,13 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {Type} from '../interface/type';
-import {noSideEffects} from '../util/closure';
+import { Type } from '../interface/type';
+import { noSideEffects } from '../util/closure';
 
 interface TypeWithMetadata extends Type<any> {
   decorators?: any[];
   ctorParameters?: () => any[];
-  propDecorators?: {[field: string]: any};
+  propDecorators?: { [field: string]: any };
 }
 
 /**
@@ -25,8 +25,8 @@ interface TypeWithMetadata extends Type<any> {
  * tree-shaken away during production builds.
  */
 export function setClassMetadata(
-    type: Type<any>, decorators: any[] | null, ctorParameters: (() => any[]) | null,
-    propDecorators: {[field: string]: any} | null): void {
+  type: Type<any>, decorators: any[] | null, ctorParameters: (() => any[]) | null,
+  propDecorators: { [field: string]: any } | null): void {
   return noSideEffects(() => {
     const clazz = type as TypeWithMetadata;
 
@@ -35,11 +35,11 @@ export function setClassMetadata(
     // `hasOwnProperty` here because it doesn't work correctly in IE10 for static fields that are
     // defined by TS. See https://github.com/angular/angular/pull/28439#issuecomment-459349218.
     const parentPrototype = clazz.prototype ? Object.getPrototypeOf(clazz.prototype) : null;
-    const parentConstructor: TypeWithMetadata|null = parentPrototype && parentPrototype.constructor;
+    const parentConstructor: TypeWithMetadata | null = parentPrototype && parentPrototype.constructor;
 
     if (decorators !== null) {
       if (clazz.decorators !== undefined &&
-          (!parentConstructor || parentConstructor.decorators !== clazz.decorators)) {
+        (!parentConstructor || parentConstructor.decorators !== clazz.decorators)) {
         clazz.decorators.push(...decorators);
       } else {
         clazz.decorators = decorators;
@@ -57,8 +57,8 @@ export function setClassMetadata(
       // unlikely that a field will be decorated both with an Angular decorator and a non-Angular
       // decorator that's also been downleveled.
       if (clazz.propDecorators !== undefined &&
-          (!parentConstructor || parentConstructor.propDecorators !== clazz.propDecorators)) {
-        clazz.propDecorators = {...clazz.propDecorators, ...propDecorators};
+        (!parentConstructor || parentConstructor.propDecorators !== clazz.propDecorators)) {
+        clazz.propDecorators = { ...clazz.propDecorators, ...propDecorators };
       } else {
         clazz.propDecorators = propDecorators;
       }

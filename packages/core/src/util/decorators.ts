@@ -38,9 +38,11 @@ export const PROP_METADATA = '__prop__metadata__';
 
 /**
  * @suppress {globalThis}
+ * 制作类装饰器
+ * 
  */
 export function makeDecorator<T>(
-  name: string,
+  /**装饰器的名字*/name: string,
   props?: (...args: any[]) => any, parentClass?: any,
   additionalProcessing?: (type: Type<T>) => void,
   typeFn?: (type: Type<T>, ...args: any[]) => void): { new(...args: any[]): any; (...args: any[]): any; (...args: any[]): (cls: any) => any; } {
@@ -48,20 +50,21 @@ export function makeDecorator<T>(
 
   function DecoratorFactory(
     this: unknown | typeof DecoratorFactory, ...args: any[]): (cls: Type<T>) => any {
+    //new 时调用
     if (this instanceof DecoratorFactory) {
       //在this上增加props函数返回的对象
-      //?args应该就是我们用装饰器时的赋值参数?
+      //doc args就是我们用装饰器时的赋值参数
       metaCtor.call(this, ...args);
       return this as typeof DecoratorFactory;
     }
-
+    //doc 把参数赋值到这个函数内
     const annotationInstance = new (DecoratorFactory as any)(...args);
     return function TypeDecorator(cls: Type<T>) {
       //doc 传入的都是增加了angular自身装饰器的类
       if (typeFn) typeFn(cls, ...args);
       // Use of Object.defineProperty is important since it creates non-enumerable property which
       // prevents the property is copied during subclassing.
-      //doc 把被同一装饰器装饰过的类放到同一数组中
+      //doc 把装饰器参数放到同一数组中
       const annotations = cls.hasOwnProperty(ANNOTATIONS) ?
         (cls as any)[ANNOTATIONS] :
         Object.defineProperty(cls, ANNOTATIONS, { value: [] })[ANNOTATIONS];
@@ -82,7 +85,11 @@ export function makeDecorator<T>(
   (DecoratorFactory as any).annotationCls = DecoratorFactory;
   return DecoratorFactory as any;
 }
-
+/**
+ * 返回一个函数(执行该函数将第一个函数+传参返回的对象,附加到该函数的this上)
+ * 
+ * 
+ */
 function makeMetadataCtor(props?: (...args: any[]) => any): any {
   //doc 返回一个函数,对调用这个函数的this,进行props函数返回对象的赋值
   return function ctor(this: any, ...args: any[]) {

@@ -175,6 +175,7 @@ export const defineInjectable = ɵɵdefineInjectable;
  *   providers from imports.
  *
  * @publicApi
+ * 传入什么返回什么,只是会加入默认值,防止多余字段传入
  */
 export function ɵɵdefineInjector(options: {factory: () => any, providers?: any[], imports?: any[]}):
     never {

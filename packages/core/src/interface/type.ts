@@ -17,7 +17,7 @@
  * @publicApi
  */
 export const Type = Function;
-
+/**判断是不是函数 */
 export function isType(v: any): v is Type<any> {
   return typeof v === 'function';
 }

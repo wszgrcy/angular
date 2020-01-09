@@ -6,20 +6,20 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {Type} from '../interface/type';
-import {ReflectionCapabilities} from '../reflection/reflection_capabilities';
-import {getClosureSafeProperty} from '../util/property';
+import { Type } from '../interface/type';
+import { ReflectionCapabilities } from '../reflection/reflection_capabilities';
+import { getClosureSafeProperty } from '../util/property';
 
-import {injectArgs, ɵɵinject} from './injector_compatibility';
-import {ClassSansProvider, ConstructorSansProvider, ExistingSansProvider, FactorySansProvider, StaticClassSansProvider, ValueProvider, ValueSansProvider} from './interface/provider';
-
+import { injectArgs, ɵɵinject } from './injector_compatibility';
+import { ClassSansProvider, ConstructorSansProvider, ExistingSansProvider, FactorySansProvider, StaticClassSansProvider, ValueProvider, ValueSansProvider } from './interface/provider';
+/**就是返回了useValue */
 const USE_VALUE =
-    getClosureSafeProperty<ValueProvider>({provide: String, useValue: getClosureSafeProperty});
+  getClosureSafeProperty<ValueProvider>({ provide: String, useValue: getClosureSafeProperty });
 const EMPTY_ARRAY: any[] = [];
 
 export function convertInjectableProviderToFactory(
-    type: Type<any>, provider?: ValueSansProvider | ExistingSansProvider | StaticClassSansProvider |
-        ConstructorSansProvider | FactorySansProvider | ClassSansProvider): () => any {
+   /**装饰的类 */ type: Type<any>, provider?: ValueSansProvider | ExistingSansProvider | StaticClassSansProvider |
+    ConstructorSansProvider | FactorySansProvider | ClassSansProvider): () => any {
   if (!provider) {
     const reflectionCapabilities = new ReflectionCapabilities();
     const deps = reflectionCapabilities.parameters(type);
@@ -32,6 +32,7 @@ export function convertInjectableProviderToFactory(
     return () => valueProvider.useValue;
   } else if ((provider as ExistingSansProvider).useExisting) {
     const existingProvider = (provider as ExistingSansProvider);
+    //todo 有变量
     return () => ɵɵinject(existingProvider.useExisting);
   } else if ((provider as FactorySansProvider).useFactory) {
     const factoryProvider = (provider as FactorySansProvider);
@@ -50,6 +51,6 @@ export function convertInjectableProviderToFactory(
       const reflectionCapabilities = new ReflectionCapabilities();
       deps = reflectionCapabilities.parameters(type);
     }
-    return () => new type(...injectArgs(deps !));
+    return () => new type(...injectArgs(deps!));
   }
 }
