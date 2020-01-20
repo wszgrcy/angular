@@ -57,16 +57,18 @@ interface WaitCallback {
 @Injectable()
 export class Testability implements PublicTestability {
   private _pendingCount: number = 0;
+  /**是否稳定,不稳定/稳定时改变状态 */
   private _isZoneStable: boolean = true;
   /**
    * Whether any work was done since the last 'whenStable' callback. This is
    * useful to detect if this could have potentially destabilized another
    * component while it is stabilizing.
+   * 不稳定时true
    * @internal
    */
   private _didWork: boolean = false;
   private _callbacks: WaitCallback[] = [];
-
+/**当前的zone里面的参数 */
   private taskTrackingZone: {macroTasks: Task[]}|null = null;
 
   constructor(private _ngZone: NgZone) {
@@ -176,6 +178,7 @@ export class Testability implements PublicTestability {
     let timeoutId: any = -1;
     if (timeout && timeout > 0) {
       timeoutId = setTimeout(() => {
+        //doc 异步执行时会把自身的回掉剔除
         this._callbacks = this._callbacks.filter((cb) => cb.timeoutId !== timeoutId);
         cb(this._didWork, this.getPendingTasks());
       }, timeout);
@@ -240,7 +243,7 @@ export class TestabilityRegistry {
    * @param token token of application, root element
    * @param testability Testability hook
    */
-  registerApplication(token: any, testability: Testability) {
+  registerApplication(token: any, testability: Testability) { 
     this._applications.set(token, testability);
   }
 

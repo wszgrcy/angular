@@ -24,6 +24,7 @@ const __global = typeof global !== 'undefined' && global;
 // Always use __globalThis if available, which is the spec-defined global variable across all
 // environments, then fallback to __global first, because in Node tests both __global and
 // __window may be defined and _global should be __global in that case.
+/**可以视为window */
 const _global = __globalThis || __global || __window || __self;
 
 /**

@@ -24,6 +24,7 @@ import { DomSanitizer, DomSanitizerImpl } from './security/dom_sanitization_serv
 /**启动的时候自动赋予的 */
 export const INTERNAL_BROWSER_PLATFORM_PROVIDERS: StaticProvider[] = [
   { provide: PLATFORM_ID, useValue: PLATFORM_BROWSER_ID },
+  //doc 初始化函数
   { provide: PLATFORM_INITIALIZER, useValue: initDomAdapter, multi: true },
   { provide: PlatformLocation, useClass: BrowserPlatformLocation, deps: [DOCUMENT] },
   //doc 在浏览器中就是document

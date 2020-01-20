@@ -50,7 +50,7 @@ export class BrowserGetTestability implements GetTestability {
 
   findTestabilityInTree(registry: TestabilityRegistry, elem: any, findInAncestors: boolean):
       Testability|null {
-    if (elem == null) {
+    if (elem == null) { 
       return null;
     }
     const t = registry.getTestability(elem);

@@ -6,12 +6,12 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {ɵparseCookieValue as parseCookieValue} from '@angular/common';
-import {ɵglobal as global} from '@angular/core';
+import { ɵparseCookieValue as parseCookieValue } from '@angular/common';
+import { ɵglobal as global } from '@angular/core';
 
-import {setRootDomAdapter} from '../dom/dom_adapter';
+import { setRootDomAdapter } from '../dom/dom_adapter';
 
-import {GenericBrowserDomAdapter} from './generic_browser_adapter';
+import { GenericBrowserDomAdapter } from './generic_browser_adapter';
 
 const _attrToPropMap = {
   'class': 'className',
@@ -23,7 +23,7 @@ const _attrToPropMap = {
 const DOM_KEY_LOCATION_NUMPAD = 3;
 
 // Map to convert some key or keyIdentifier values to what will be returned by getEventKey
-const _keyMap: {[k: string]: string} = {
+const _keyMap: { [k: string]: string } = {
   // The following values are here for cross-browser compatibility and to match the W3C standard
   // cf http://www.w3.org/TR/DOM-Level-3-Events-key/
   '\b': 'Backspace',
@@ -62,10 +62,10 @@ const _chromeNumKeyPadMap = {
   '\x60': '0',
   '\x90': 'NumLock'
 };
-
+/**传入节点this是否包含传入节点other */
 const nodeContains: (this: Node, other: Node) => boolean = (() => {
   if (global['Node']) {
-    return global['Node'].prototype.contains || function(this: Node, node: any) {
+    return global['Node'].prototype.contains || function (this: Node, node: any) {
       return !!(this.compareDocumentPosition(node) & 16);
     };
   }
@@ -132,6 +132,7 @@ export class BrowserDomAdapter extends GenericBrowserDomAdapter {
   dispatchEvent(el: Node, evt: any) { el.dispatchEvent(evt); }
   createMouseEvent(eventType: string): MouseEvent {
     const evt: MouseEvent = this.getDefaultDocument().createEvent('MouseEvent');
+
     evt.initEvent(eventType, true, true);
     return evt;
   }
@@ -148,12 +149,12 @@ export class BrowserDomAdapter extends GenericBrowserDomAdapter {
     return evt.defaultPrevented || evt.returnValue != null && !evt.returnValue;
   }
   getInnerHTML(el: HTMLElement): string { return el.innerHTML; }
-  getTemplateContent(el: Node): Node|null {
+  getTemplateContent(el: Node): Node | null {
     return 'content' in el && this.isTemplateElement(el) ? (<any>el).content : null;
   }
   getOuterHTML(el: HTMLElement): string { return el.outerHTML; }
   nodeName(node: Node): string { return node.nodeName; }
-  nodeValue(node: Node): string|null { return node.nodeValue; }
+  nodeValue(node: Node): string | null { return node.nodeValue; }
   type(node: HTMLInputElement): string { return node.type; }
   content(node: Node): Node {
     if (this.hasProperty(node, 'content')) {
@@ -162,9 +163,9 @@ export class BrowserDomAdapter extends GenericBrowserDomAdapter {
       return node;
     }
   }
-  firstChild(el: Node): Node|null { return el.firstChild; }
-  nextSibling(el: Node): Node|null { return el.nextSibling; }
-  parentElement(el: Node): Node|null { return el.parentNode; }
+  firstChild(el: Node): Node | null { return el.firstChild; }
+  nextSibling(el: Node): Node | null { return el.nextSibling; }
+  parentElement(el: Node): Node | null { return el.parentNode; }
   childNodes(el: any): Node[] { return el.childNodes; }
   childNodesAsList(el: Node): any[] {
     const childNodes = el.childNodes;
@@ -194,7 +195,7 @@ export class BrowserDomAdapter extends GenericBrowserDomAdapter {
   }
   insertAfter(parent: Node, ref: Node, node: any) { parent.insertBefore(node, ref.nextSibling); }
   setInnerHTML(el: Element, value: string) { el.innerHTML = value; }
-  getText(el: Node): string|null { return el.textContent; }
+  getText(el: Node): string | null { return el.textContent; }
   setText(el: Node, value: string) { el.textContent = value; }
   getValue(el: any): string { return el.value; }
   setValue(el: any, value: string) { el.value = value; }
@@ -255,7 +256,7 @@ export class BrowserDomAdapter extends GenericBrowserDomAdapter {
     element.style[stylename] = '';
   }
   getStyle(element: any, stylename: string): string { return element.style[stylename]; }
-  hasStyle(element: any, styleName: string, styleValue?: string|null): boolean {
+  hasStyle(element: any, styleName: string, styleValue?: string | null): boolean {
     const value = this.getStyle(element, styleName) || '';
     return styleValue ? value == styleValue : value.length > 0;
   }
@@ -275,10 +276,10 @@ export class BrowserDomAdapter extends GenericBrowserDomAdapter {
   hasAttributeNS(element: Element, ns: string, attribute: string): boolean {
     return element.hasAttributeNS(ns, attribute);
   }
-  getAttribute(element: Element, attribute: string): string|null {
+  getAttribute(element: Element, attribute: string): string | null {
     return element.getAttribute(attribute);
   }
-  getAttributeNS(element: Element, ns: string, name: string): string|null {
+  getAttributeNS(element: Element, ns: string, name: string): string | null {
     return element.getAttributeNS(ns, name);
   }
   setAttribute(element: Element, name: string, value: string) { element.setAttribute(name, value); }
@@ -298,7 +299,7 @@ export class BrowserDomAdapter extends GenericBrowserDomAdapter {
     try {
       return el.getBoundingClientRect();
     } catch {
-      return {top: 0, bottom: 0, left: 0, right: 0, width: 0, height: 0};
+      return { top: 0, bottom: 0, left: 0, right: 0, width: 0, height: 0 };
     }
   }
   getTitle(doc: Document): string { return doc.title; }
@@ -306,8 +307,8 @@ export class BrowserDomAdapter extends GenericBrowserDomAdapter {
   elementMatches(n: any, selector: string): boolean {
     if (this.isElementNode(n)) {
       return n.matches && n.matches(selector) ||
-          n.msMatchesSelector && n.msMatchesSelector(selector) ||
-          n.webkitMatchesSelector && n.webkitMatchesSelector(selector);
+        n.msMatchesSelector && n.msMatchesSelector(selector) ||
+        n.webkitMatchesSelector && n.webkitMatchesSelector(selector);
     }
 
     return false;
@@ -324,7 +325,7 @@ export class BrowserDomAdapter extends GenericBrowserDomAdapter {
   isShadowRoot(node: any): boolean { return node instanceof DocumentFragment; }
   importIntoDoc(node: Node): any { return document.importNode(this.templateAwareRoot(node), true); }
   adoptNode(node: Node): any { return document.adoptNode(node); }
-  getHref(el: Element): string { return el.getAttribute('href') !; }
+  getHref(el: Element): string { return el.getAttribute('href')!; }
 
   getEventKey(event: any): string {
     let key = event.key;
@@ -349,7 +350,7 @@ export class BrowserDomAdapter extends GenericBrowserDomAdapter {
 
     return _keyMap[key] || key;
   }
-  getGlobalEventTarget(doc: Document, target: string): EventTarget|null {
+  getGlobalEventTarget(doc: Document, target: string): EventTarget | null {
     if (target === 'window') {
       return window;
     }
@@ -363,7 +364,7 @@ export class BrowserDomAdapter extends GenericBrowserDomAdapter {
   }
   getHistory(): History { return window.history; }
   getLocation(): Location { return window.location; }
-  getBaseHref(doc: Document): string|null {
+  getBaseHref(doc: Document): string | null {
     const href = getBaseElementHref();
     return href == null ? null : relativePath(href);
   }
@@ -372,24 +373,24 @@ export class BrowserDomAdapter extends GenericBrowserDomAdapter {
   setData(element: Element, name: string, value: string) {
     this.setAttribute(element, 'data-' + name, value);
   }
-  getData(element: Element, name: string): string|null {
+  getData(element: Element, name: string): string | null {
     return this.getAttribute(element, 'data-' + name);
   }
   getComputedStyle(element: any): any { return getComputedStyle(element); }
   // TODO(tbosch): move this into a separate environment class once we have it
   supportsWebAnimation(): boolean {
-    return typeof(<any>Element).prototype['animate'] === 'function';
+    return typeof (<any>Element).prototype['animate'] === 'function';
   }
   performanceNow(): number {
     // performance.now() is not available in all browsers, see
     // http://caniuse.com/#search=performance.now
     return window.performance && window.performance.now ? window.performance.now() :
-                                                          new Date().getTime();
+      new Date().getTime();
   }
 
   supportsCookies(): boolean { return true; }
 
-  getCookie(name: string): string|null { return parseCookieValue(document.cookie, name); }
+  getCookie(name: string): string | null { return parseCookieValue(document.cookie, name); }
 
   setCookie(name: string, value: string) {
     // document.cookie is magical, assigning into it assigns/overrides one cookie value, but does
@@ -398,10 +399,10 @@ export class BrowserDomAdapter extends GenericBrowserDomAdapter {
   }
 }
 
-let baseElement: HTMLElement|null = null;
-function getBaseElementHref(): string|null {
+let baseElement: HTMLElement | null = null;
+function getBaseElementHref(): string | null {
   if (!baseElement) {
-    baseElement = document.querySelector('base') !;
+    baseElement = document.querySelector('base')!;
     if (!baseElement) {
       return null;
     }
@@ -417,5 +418,5 @@ function relativePath(url: any): string {
   }
   urlParsingNode.setAttribute('href', url);
   return (urlParsingNode.pathname.charAt(0) === '/') ? urlParsingNode.pathname :
-                                                       '/' + urlParsingNode.pathname;
+    '/' + urlParsingNode.pathname;
 }

@@ -16,5 +16,5 @@ export function scheduleMicroTask(fn: Function) {
     promise.then(() => { fn && fn.apply(null, null); });
   } else {
     Zone.current.scheduleMicroTask('scheduleMicrotask', fn);
-  }
+  } 
 }
