@@ -177,7 +177,7 @@ export class DirectiveResolver {
 function isDirectiveMetadata(type: any): type is Directive {
   return createDirective.isTypeOf(type) || createComponent.isTypeOf(type);
 }
-
+/**查找满足条件的倒数第一项 */
 export function findLast<T>(arr: T[], condition: (value: T) => boolean): T|null {
   for (let i = arr.length - 1; i >= 0; i--) {
     if (condition(arr[i])) {

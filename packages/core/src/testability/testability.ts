@@ -6,9 +6,9 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {Injectable} from '../di';
-import {scheduleMicroTask} from '../util/microtask';
-import {NgZone} from '../zone/ng_zone';
+import { Injectable } from "../di";
+import { scheduleMicroTask } from "../util/microtask";
+import { NgZone } from "../zone/ng_zone";
 
 /**
  * Testability API.
@@ -18,7 +18,11 @@ import {NgZone} from '../zone/ng_zone';
  */
 export declare interface PublicTestability {
   isStable(): boolean;
-  whenStable(callback: Function, timeout?: number, updateCallback?: Function): void;
+  whenStable(
+    callback: Function,
+    timeout?: number,
+    updateCallback?: Function
+  ): void;
   findProviders(using: any, provider: string, exactMatch: boolean): any[];
 }
 
@@ -37,7 +41,10 @@ export interface TaskData {
 }
 
 // Angular internal, not intended for public API.
-export type DoneCallback = (didWork: boolean, tasks?: PendingMacrotask[]) => void;
+export type DoneCallback = (
+  didWork: boolean,
+  tasks?: PendingMacrotask[]
+) => void;
 export type UpdateCallback = (tasks: PendingMacrotask[]) => boolean;
 
 interface WaitCallback {
@@ -68,14 +75,17 @@ export class Testability implements PublicTestability {
    */
   private _didWork: boolean = false;
   private _callbacks: WaitCallback[] = [];
-/**当前的zone里面的参数 */
-  private taskTrackingZone: {macroTasks: Task[]}|null = null;
+  /**当前的zone里面TaskTrackingZone的参数 */
+  private taskTrackingZone: { macroTasks: Task[] } | null = null;
 
   constructor(private _ngZone: NgZone) {
     this._watchAngularEvents();
     _ngZone.run(() => {
       this.taskTrackingZone =
-          typeof Zone == 'undefined' ? null : Zone.current.get('TaskTrackingZone');
+        typeof Zone == "undefined"
+          ? null
+          : Zone.current.get("TaskTrackingZone");
+      console.log("只有构造时才会拿TaskTrackingZone", this.taskTrackingZone);
     });
   }
 
@@ -117,7 +127,7 @@ export class Testability implements PublicTestability {
   decreasePendingRequestCount(): number {
     this._pendingCount -= 1;
     if (this._pendingCount < 0) {
-      throw new Error('pending async requests below zero');
+      throw new Error("pending async requests below zero");
     }
     this._runCallbacksIfReady();
     return this._pendingCount;
@@ -127,15 +137,24 @@ export class Testability implements PublicTestability {
    * Whether an associated application is stable
    */
   isStable(): boolean {
-    return this._isZoneStable && this._pendingCount === 0 && !this._ngZone.hasPendingMacrotasks;
+    return (
+      this._isZoneStable &&
+      this._pendingCount === 0 &&
+      !this._ngZone.hasPendingMacrotasks
+    );
   }
-
+  /**稳定时执行 */
   private _runCallbacksIfReady(): void {
+    console.log(
+      "_runCallbacksIfReady",
+      this._callbacks,
+      this._callbacks.length
+    );
     if (this.isStable()) {
       // Schedules the call backs in a new frame so that it is always async.
       scheduleMicroTask(() => {
         while (this._callbacks.length !== 0) {
-          let cb = this._callbacks.pop() !;
+          let cb = this._callbacks.pop()!;
           clearTimeout(cb.timeoutId);
           cb.doneCb(this._didWork);
         }
@@ -144,7 +163,7 @@ export class Testability implements PublicTestability {
     } else {
       // Still not stable, send updates.
       let pending = this.getPendingTasks();
-      this._callbacks = this._callbacks.filter((cb) => {
+      this._callbacks = this._callbacks.filter(cb => {
         if (cb.updateCb && cb.updateCb(pending)) {
           clearTimeout(cb.timeoutId);
           return false;
@@ -174,16 +193,26 @@ export class Testability implements PublicTestability {
     });
   }
 
-  private addCallback(cb: DoneCallback, timeout?: number, updateCb?: UpdateCallback) {
+  private addCallback(
+    cb: DoneCallback,
+    timeout?: number,
+    updateCb?: UpdateCallback
+  ) {
     let timeoutId: any = -1;
     if (timeout && timeout > 0) {
       timeoutId = setTimeout(() => {
         //doc 异步执行时会把自身的回掉剔除
-        this._callbacks = this._callbacks.filter((cb) => cb.timeoutId !== timeoutId);
+        this._callbacks = this._callbacks.filter(
+          cb => cb.timeoutId !== timeoutId
+        );
         cb(this._didWork, this.getPendingTasks());
       }, timeout);
     }
-    this._callbacks.push(<WaitCallback>{doneCb: cb, timeoutId: timeoutId, updateCb: updateCb});
+    this._callbacks.push(<WaitCallback>{
+      doneCb: cb,
+      timeoutId: timeoutId,
+      updateCb: updateCb
+    });
   }
 
   /**
@@ -197,15 +226,23 @@ export class Testability implements PublicTestability {
    * @param updateCb Optional. If specified, this callback will be invoked whenever the set of
    *    pending macrotasks changes. If this callback returns true doneCb will not be invoked
    *    and no further updates will be issued.
+   * 不会被调用?
    */
   whenStable(doneCb: Function, timeout?: number, updateCb?: Function): void {
+    console.log("稳定时调用");
+    console.trace();
     if (updateCb && !this.taskTrackingZone) {
       throw new Error(
-          'Task tracking zone is required when passing an update callback to ' +
-          'whenStable(). Is "zone.js/dist/task-tracking.js" loaded?');
+        "Task tracking zone is required when passing an update callback to " +
+          'whenStable(). Is "zone.js/dist/task-tracking.js" loaded?'
+      );
     }
     // These arguments are 'Function' above to keep the public API simple.
-    this.addCallback(doneCb as DoneCallback, timeout, updateCb as UpdateCallback);
+    this.addCallback(
+      doneCb as DoneCallback,
+      timeout,
+      updateCb as UpdateCallback
+    );
     this._runCallbacksIfReady();
   }
 
@@ -213,7 +250,9 @@ export class Testability implements PublicTestability {
    * Get the number of pending requests
    * @deprecated pending requests are now tracked with zones
    */
-  getPendingRequestCount(): number { return this._pendingCount; }
+  getPendingRequestCount(): number {
+    return this._pendingCount;
+  }
 
   /**
    * Find providers by name
@@ -236,14 +275,16 @@ export class TestabilityRegistry {
   /** @internal */
   _applications = new Map<any, Testability>();
 
-  constructor() { _testabilityGetter.addToWindow(this); }
+  constructor() {
+    _testabilityGetter.addToWindow(this);
+  }
 
   /**
    * Registers an application with a testability hook so that it can be tracked
    * @param token token of application, root element
    * @param testability Testability hook
    */
-  registerApplication(token: any, testability: Testability) { 
+  registerApplication(token: any, testability: Testability) {
     this._applications.set(token, testability);
   }
 
@@ -251,28 +292,38 @@ export class TestabilityRegistry {
    * Unregisters an application.
    * @param token token of application, root element
    */
-  unregisterApplication(token: any) { this._applications.delete(token); }
+  unregisterApplication(token: any) {
+    this._applications.delete(token);
+  }
 
   /**
    * Unregisters all applications
    */
-  unregisterAllApplications() { this._applications.clear(); }
+  unregisterAllApplications() {
+    this._applications.clear();
+  }
 
   /**
    * Get a testability hook associated with the application
    * @param elem root element
    */
-  getTestability(elem: any): Testability|null { return this._applications.get(elem) || null; }
+  getTestability(elem: any): Testability | null {
+    return this._applications.get(elem) || null;
+  }
 
   /**
    * Get all registered testabilities
    */
-  getAllTestabilities(): Testability[] { return Array.from(this._applications.values()); }
+  getAllTestabilities(): Testability[] {
+    return Array.from(this._applications.values());
+  }
 
   /**
    * Get all registered applications(root elements)
    */
-  getAllRootElements(): any[] { return Array.from(this._applications.keys()); }
+  getAllRootElements(): any[] {
+    return Array.from(this._applications.keys());
+  }
 
   /**
    * Find testability of a node in the Tree
@@ -280,8 +331,15 @@ export class TestabilityRegistry {
    * @param findInAncestors whether finding testability in ancestors if testability was not found in
    * current node
    */
-  findTestabilityInTree(elem: Node, findInAncestors: boolean = true): Testability|null {
-    return _testabilityGetter.findTestabilityInTree(this, elem, findInAncestors);
+  findTestabilityInTree(
+    elem: Node,
+    findInAncestors: boolean = true
+  ): Testability | null {
+    return _testabilityGetter.findTestabilityInTree(
+      this,
+      elem,
+      findInAncestors
+    );
   }
 }
 
@@ -293,14 +351,20 @@ export class TestabilityRegistry {
  */
 export interface GetTestability {
   addToWindow(registry: TestabilityRegistry): void;
-  findTestabilityInTree(registry: TestabilityRegistry, elem: any, findInAncestors: boolean):
-      Testability|null;
+  findTestabilityInTree(
+    registry: TestabilityRegistry,
+    elem: any,
+    findInAncestors: boolean
+  ): Testability | null;
 }
 
 class _NoopGetTestability implements GetTestability {
   addToWindow(registry: TestabilityRegistry): void {}
-  findTestabilityInTree(registry: TestabilityRegistry, elem: any, findInAncestors: boolean):
-      Testability|null {
+  findTestabilityInTree(
+    registry: TestabilityRegistry,
+    elem: any,
+    findInAncestors: boolean
+  ): Testability | null {
     return null;
   }
 }
@@ -312,5 +376,5 @@ class _NoopGetTestability implements GetTestability {
 export function setTestabilityGetter(getter: GetTestability): void {
   _testabilityGetter = getter;
 }
-
+/**可测试性get,静态init赋值 */
 let _testabilityGetter: GetTestability = new _NoopGetTestability();

@@ -24,7 +24,10 @@ export abstract class SummaryResolver<T> {
   abstract getKnownModuleName(fileName: string): string|null;
   abstract addSummary(summary: Summary<T>): void;
 }
-
+/**
+ * jit使用
+ * 
+ */
 export class JitSummaryResolver implements SummaryResolver<Type> {
   private _summaries = new Map<Type, Summary<Type>>();
 
@@ -37,5 +40,6 @@ export class JitSummaryResolver implements SummaryResolver<Type> {
   getSymbolsOf(): Type[] { return []; }
   getImportAs(reference: Type): Type { return reference; }
   getKnownModuleName(fileName: string) { return null; }
-  addSummary(summary: Summary<Type>) { this._summaries.set(summary.symbol, summary); }
+  addSummary(summary: Summary<Type>) {
+    this._summaries.set(summary.symbol, summary); }
 }

@@ -9,7 +9,7 @@
 import {Type} from '@angular/core';
 
 let _DOM: DomAdapter = null !;
-
+/**dom适配器就是`BrowserDomAdapter`实例 */
 export function getDOM() {
   return _DOM;
 }

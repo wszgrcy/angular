@@ -80,7 +80,7 @@ export function makeDecorator<T>(
   if (parentClass) {
     DecoratorFactory.prototype = Object.create(parentClass.prototype);
   }
-
+//doc 判断类型的时候用到
   DecoratorFactory.prototype.ngMetadataName = name;
   (DecoratorFactory as any).annotationCls = DecoratorFactory;
   return DecoratorFactory as any;

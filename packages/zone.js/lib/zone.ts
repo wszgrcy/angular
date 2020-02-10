@@ -5,7 +5,6 @@
  * Use of this source code is governed by an MIT-style license that can be
  * found in the LICENSE file at https://angular.io/license
  */
-
 /**
  * Suppress closure compiler errors about unknown 'global' variable
  * @fileoverview
@@ -605,6 +604,7 @@ interface Task {
 
   /**
    * Debug string representing the API which requested the scheduling of the task.
+   * 调试用的
    */
   source: string;
 
@@ -688,7 +688,8 @@ const Zone: ZoneType = (function (global: any) {
     global['performance'];
   function mark(name: string) { performance && performance['mark'] && performance['mark'](name); }
   function performanceMeasure(name: string, label: string) {
-    performance && performance['measure'] && performance['measure'](name, label);
+    let a = performance && performance['measure'] && performance['measure'](name, label);
+    console.log('性能', performance)
   }
   //doc 开始测量性能?
 
@@ -698,7 +699,6 @@ const Zone: ZoneType = (function (global: any) {
   // __Zone_symbol_prefix global can be used to override the default zone
   // symbol prefix with a custom one if needed.
   const symbolPrefix = global['__Zone_symbol_prefix'] || '__zone_symbol__';
-
   function __symbol__(name: string) { return symbolPrefix + name; }
 
   const checkDuplicate = global[__symbol__('forceDuplicateZoneCheck')] === true;
@@ -718,7 +718,7 @@ const Zone: ZoneType = (function (global: any) {
       return global['Zone'];
     }
   }
-
+  //↑为初始化
   class Zone implements AmbientZone {
     // tslint:disable-next-line:require-internal-with-underscore
     static __symbol__: (name: string) => string = __symbol__;
@@ -768,6 +768,7 @@ const Zone: ZoneType = (function (global: any) {
     private _parent: Zone | null;
     private _name: string;
     private _properties: { [key: string]: any };
+    /**todo */
     private _zoneDelegate: ZoneDelegate;
 
     constructor(parent: Zone | null, zoneSpec: ZoneSpec | null) {
@@ -795,10 +796,11 @@ const Zone: ZoneType = (function (global: any) {
     }
 
     public fork(zoneSpec: ZoneSpec): AmbientZone {
+      // console.log('zoneFork')
       if (!zoneSpec) throw new Error('ZoneSpec required!');
       return this._zoneDelegate.fork(this, zoneSpec);
     }
-/**包裹后用的runguarded */
+    /**包裹后用的runguarded,可以报错 */
     public wrap<T extends Function>(callback: T, source: string): T {
       if (typeof callback !== 'function') {
         throw new Error('Expecting function got: ' + callback);
@@ -809,14 +811,17 @@ const Zone: ZoneType = (function (global: any) {
         return zone.runGuarded(_callback, this, <any>arguments, source);
       } as any as T;
     }
-
+    /**不会报错 */
     public run(callback: Function, applyThis?: any, applyArgs?: any[], source?: string): any;
     public run<T>(
       callback: (...args: any[]) => T, applyThis?: any, applyArgs?: any[], source?: string): T {
+      console.log('run运行')
+      //doc 调用的时候,更改当前的zone为本zone
       _currentZoneFrame = { parent: _currentZoneFrame, zone: this };
       try {
         return this._zoneDelegate.invoke(this, callback, applyThis, applyArgs, source);
       } finally {
+        //把当前空间移动回去
         _currentZoneFrame = _currentZoneFrame.parent!;
       }
     }
@@ -839,8 +844,9 @@ const Zone: ZoneType = (function (global: any) {
       }
     }
 
-
+    /**应该在构造中调用 */
     runTask(task: Task, applyThis?: any, applyArgs?: any): any {
+      console.log('任务运行')
       if (task.zone != this) {
         throw new Error(
           'A task can only be run in the zone of creation! (Creation: ' +
@@ -849,12 +855,13 @@ const Zone: ZoneType = (function (global: any) {
       // https://github.com/angular/zone.js/issues/778, sometimes eventTask
       // will run in notScheduled(canceled) state, we should not try to
       // run such kind of task but just return
-
+      //doc 未调度并且是事件或者宏任务,返回
       if (task.state === notScheduled && (task.type === eventTask || task.type === macroTask)) {
         return;
       }
 
       const reEntryGuard = task.state != running;
+      //doc 从一个状态过度到另外一个状态
       reEntryGuard && (task as ZoneTask<any>)._transitionTo(running, scheduled);
       task.runCount++;
       const previousTask = _currentTask;
@@ -888,7 +895,7 @@ const Zone: ZoneType = (function (global: any) {
         _currentTask = previousTask;
       }
     }
-
+    /**也不能直接调用 */
     scheduleTask<T extends Task>(task: T): T {
       if (task.zone && task.zone !== this) {
         // check if the task was rescheduled, the newZone
@@ -977,7 +984,7 @@ const Zone: ZoneType = (function (global: any) {
       }
     }
   }
-
+  /**默认的zonespec参数 */
   const DELEGATE_ZS: ZoneSpec = {
     name: '',
     onHasTask: (delegate: AmbientZoneDelegate, _: AmbientZone, target: AmbientZone,
@@ -1003,12 +1010,15 @@ const Zone: ZoneType = (function (global: any) {
     } = { 'microTask': 0, 'macroTask': 0, 'eventTask': 0 };
 
     private _parentDelegate: ZoneDelegate | null;
-
+    /**有onFork就是父的,没有就是父的_forkDlgt */
     private _forkDlgt: ZoneDelegate | null;
+    /**当前的zonespec(对象中有onFork)或者是父的zonespec */
     private _forkZS: ZoneSpec | null;
+    /**有onFork当前zone或父的_forkCurrZone */
     private _forkCurrZone: Zone | null;
 
     private _interceptDlgt: ZoneDelegate | null;
+    /**有onIntercept当前zs没有是父的_interceptZS */
     private _interceptZS: ZoneSpec | null;
     private _interceptCurrZone: Zone | null;
 
@@ -1034,15 +1044,17 @@ const Zone: ZoneType = (function (global: any) {
 
     private _hasTaskDlgt: ZoneDelegate | null;
     private _hasTaskDlgtOwner: ZoneDelegate | null;
+    /**当前的zoneSpec(当传入参数有onHasTask时)或默认的 */
     private _hasTaskZS: ZoneSpec | null;
     private _hasTaskCurrZone: Zone | null;
 
-    constructor(zone: Zone, parentDelegate: ZoneDelegate | null, zoneSpec: ZoneSpec | null) {
+    constructor(/**new他的zone*/zone: Zone, /**父zone中的delegate*/parentDelegate: ZoneDelegate | null, /**new时传入的参数*/zoneSpec: ZoneSpec | null) {
       this.zone = zone;
       this._parentDelegate = parentDelegate;
 
       this._forkZS =
         zoneSpec && (zoneSpec && zoneSpec.onFork ? zoneSpec : parentDelegate!._forkZS);
+      // console.log('[zone参数]', zoneSpec, !!parentDelegate && !!parentDelegate!._forkDlgt);
       this._forkDlgt = zoneSpec && (zoneSpec.onFork ? parentDelegate : parentDelegate!._forkDlgt);
       this._forkCurrZone =
         zoneSpec && (zoneSpec.onFork ? this.zone : parentDelegate!._forkCurrZone);
@@ -1054,7 +1066,9 @@ const Zone: ZoneType = (function (global: any) {
       this._interceptCurrZone =
         zoneSpec && (zoneSpec.onIntercept ? this.zone : parentDelegate!._interceptCurrZone);
 
+      // console.log('因为有onInvoke所以应该赋值',zoneSpec!)
       this._invokeZS = zoneSpec && (zoneSpec.onInvoke ? zoneSpec : parentDelegate!._invokeZS);
+      // console.log(this._invokeZS)
       this._invokeDlgt =
         zoneSpec && (zoneSpec.onInvoke ? parentDelegate! : parentDelegate!._invokeDlgt);
       this._invokeCurrZone =
@@ -1102,6 +1116,7 @@ const Zone: ZoneType = (function (global: any) {
         this._hasTaskDlgt = parentDelegate;
         this._hasTaskDlgtOwner = this;
         this._hasTaskCurrZone = zone;
+        //doc 设置默认值
         if (!zoneSpec!.onScheduleTask) {
           this._scheduleTaskZS = DELEGATE_ZS;
           this._scheduleTaskDlgt = parentDelegate!;
@@ -1121,6 +1136,7 @@ const Zone: ZoneType = (function (global: any) {
     }
 
     fork(targetZone: Zone, zoneSpec: ZoneSpec): AmbientZone {
+
       return this._forkZS ?
         this._forkZS.onFork!(this._forkDlgt!, this.zone, targetZone, zoneSpec) :
         new Zone(targetZone, zoneSpec);
@@ -1132,17 +1148,20 @@ const Zone: ZoneType = (function (global: any) {
           this._interceptDlgt!, this._interceptCurrZone!, targetZone, callback, source) :
         callback;
     }
-
+    /**run调用这个,参数传递进去 */
     invoke(
       targetZone: Zone, callback: Function, applyThis: any, applyArgs?: any[],
       source?: string): any {
+      // console.log('调用?invoke', this._invokeZS)
+      // console.log('[回调]', callback, '[this]', applyThis, '[args]', applyArgs)
+      //doc 如果有自定义钩子,就会走自己的调用方法
       return this._invokeZS ?
         this._invokeZS.onInvoke!(
           this._invokeDlgt!, this._invokeCurrZone!, targetZone, callback, applyThis,
           applyArgs, source) :
         callback.apply(applyThis, applyArgs);
     }
-
+    /**当报错时处理错误的钩子 */
     handleError(targetZone: Zone, error: any): boolean {
       return this._handleErrorZS ?
         this._handleErrorZS.onHandleError!(
@@ -1237,8 +1256,10 @@ const Zone: ZoneType = (function (global: any) {
     public cancelFn: ((task: Task) => void) | undefined;
     // tslint:disable-next-line:require-internal-with-underscore
     _zone: Zone | null = null;
+    /**运行数量 */
     public runCount: number = 0;
     // tslint:disable-next-line:require-internal-with-underscore
+    /**外界? */
     _zoneDelegates: ZoneDelegate[] | null = null;
     // tslint:disable-next-line:require-internal-with-underscore
     _state: TaskState = 'notScheduled';
@@ -1246,6 +1267,7 @@ const Zone: ZoneType = (function (global: any) {
     constructor(
       type: T, source: string, callback: Function, options: TaskData | undefined,
       scheduleFn: ((task: Task) => void) | undefined, cancelFn: ((task: Task) => void) | undefined) {
+      console.log('开始构造', type, source, callback, options, scheduleFn, cancelFn)
       this.type = type;
       this.source = source;
       this.data = options;
@@ -1261,6 +1283,7 @@ const Zone: ZoneType = (function (global: any) {
         this.invoke = ZoneTask.invokeTask;
       } else {
         this.invoke = function () {
+          //doc 自己的静态类方法，当作全局使用
           return ZoneTask.invokeTask.call(global, self, this, <any>arguments);
         };
       }
@@ -1289,6 +1312,7 @@ const Zone: ZoneType = (function (global: any) {
     public cancelScheduleRequest() { this._transitionTo(notScheduled, scheduling); }
 
     // tslint:disable-next-line:require-internal-with-underscore
+    /**从状态1或状态2变更到其他状态,如果为`notScheduled`,`_zoneDelegates`属性会为null */
     _transitionTo(toState: TaskState, fromState1: TaskState, fromState2?: TaskState) {
       if (this._state === fromState1 || this._state === fromState2) {
         this._state = toState;
@@ -1362,6 +1386,7 @@ const Zone: ZoneType = (function (global: any) {
   }
 
   function drainMicroTaskQueue() {
+    console.log('drainMicroTaskQueue')
     if (!_isDrainingMicrotaskQueue) {
       _isDrainingMicrotaskQueue = true;
       while (_microTaskQueue.length) {
@@ -1433,6 +1458,7 @@ const Zone: ZoneType = (function (global: any) {
   };
   let _currentZoneFrame: _ZoneFrame = { parent: null, zone: new Zone(null, null) };
   let _currentTask: Task | null = null;
+  /**todo嵌套任务框架数？ */
   let _numberOfNestedTaskFrames = 0;
 
   function noop() { }

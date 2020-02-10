@@ -123,6 +123,9 @@ export interface NgModule {
   schemas?: Array<SchemaMetadata | any[]>;
   id?: string;
 }
+/**
+ * 
+ */
 export const createNgModule =
   makeMetadataFactory<NgModule>('NgModule', (ngModule: NgModule) => ngModule);
 
@@ -278,10 +281,15 @@ export enum MissingTranslationStrategy {
 
 export interface MetadataFactory<T> {
   (...args: any[]): T;
+  /**传入对象是否和指定的相等 */
   isTypeOf(obj: any): obj is T;
   ngMetadataName: string;
 }
-
+/**
+ * 
+ * isTypeOf 判断对象的ngMetadataName属性是否为传入的(比如ngmodule)
+ * 返回的函数调用,为传入函数执行后返回的对象+name
+ */
 function makeMetadataFactory<T>(name: string, props?: (...args: any[]) => T): MetadataFactory<T> {
   // This must be declared as a function, not a fat arrow, so that ES2015 devmode produces code
   // that works with the static_reflector.ts in the ViewEngine compiler.

@@ -6,7 +6,7 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import { EventEmitter } from '../event_emitter';
+import { EventEmitter } from "../event_emitter";
 
 /**
  * An injectable service for executing work inside or outside of the Angular zone.
@@ -93,6 +93,7 @@ export class NgZone {
 
   /**
    * Notifies when code enters Angular Zone. This gets fired first on VM Turn.
+   * 任务调用时不稳定(同步,异步)
    */
   readonly onUnstable: EventEmitter<any> = new EventEmitter(false);
 
@@ -117,42 +118,46 @@ export class NgZone {
   /**单实例 */
   constructor({ enableLongStackTrace = false }) {
     // console.log('是否是单实例?ngZone');
-    if (typeof Zone == 'undefined') {
+    if (typeof Zone == "undefined") {
       throw new Error(`In this configuration Angular requires Zone.js`);
     }
 
     Zone.assertZonePatched();
-    const self = this as any as NgZonePrivate;
+    const self = (this as any) as NgZonePrivate;
     self._nesting = 0;
 
     self._outer = self._inner = Zone.current;
 
-    if ((Zone as any)['wtfZoneSpec']) {
-      self._inner = self._inner.fork((Zone as any)['wtfZoneSpec']);
+    if ((Zone as any)["wtfZoneSpec"]) {
+      self._inner = self._inner.fork((Zone as any)["wtfZoneSpec"]);
     }
 
-    if ((Zone as any)['TaskTrackingZoneSpec']) {
-      self._inner = self._inner.fork(new ((Zone as any)['TaskTrackingZoneSpec'] as any));
+    if ((Zone as any)["TaskTrackingZoneSpec"]) {
+      self._inner = self._inner.fork(
+        new ((Zone as any)["TaskTrackingZoneSpec"] as any)()
+      );
     }
 
-    if (enableLongStackTrace && (Zone as any)['longStackTraceZoneSpec']) {
-      self._inner = self._inner.fork((Zone as any)['longStackTraceZoneSpec']);
+    if (enableLongStackTrace && (Zone as any)["longStackTraceZoneSpec"]) {
+      self._inner = self._inner.fork((Zone as any)["longStackTraceZoneSpec"]);
     }
 
     forkInnerZoneWithAngularBehavior(self);
   }
 
-  static isInAngularZone(): boolean { return Zone.current.get('isAngularZone') === true; }
-
+  static isInAngularZone(): boolean {
+    return Zone.current.get("isAngularZone") === true;
+  }
+  /**断言在ngzone内 */
   static assertInAngularZone(): void {
     if (!NgZone.isInAngularZone()) {
-      throw new Error('Expected to be in Angular Zone, but it is not!');
+      throw new Error("Expected to be in Angular Zone, but it is not!");
     }
   }
-
+  /**断言不再ngzone内 */
   static assertNotInAngularZone(): void {
     if (NgZone.isInAngularZone()) {
-      throw new Error('Expected to not be in Angular Zone, but it is!');
+      throw new Error("Expected to not be in Angular Zone, but it is!");
     }
   }
 
@@ -169,7 +174,11 @@ export class NgZone {
    * If a synchronous error happens it will be rethrown and not reported via `onError`.
    */
   run<T>(fn: (...args: any[]) => T, applyThis?: any, applyArgs?: any[]): T {
-    return (this as any as NgZonePrivate)._inner.run(fn, applyThis, applyArgs) as T;
+    return ((this as any) as NgZonePrivate)._inner.run(
+      fn,
+      applyThis,
+      applyArgs
+    ) as T;
   }
 
   /**
@@ -184,9 +193,20 @@ export class NgZone {
    *
    * If a synchronous error happens it will be rethrown and not reported via `onError`.
    */
-  runTask<T>(fn: (...args: any[]) => T, applyThis?: any, applyArgs?: any[], name?: string): T {
-    const zone = (this as any as NgZonePrivate)._inner;
-    const task = zone.scheduleEventTask('NgZoneEvent: ' + name, fn, EMPTY_PAYLOAD, noop, noop);
+  runTask<T>(
+    fn: (...args: any[]) => T,
+    applyThis?: any,
+    applyArgs?: any[],
+    name?: string
+  ): T {
+    const zone = ((this as any) as NgZonePrivate)._inner;
+    const task = zone.scheduleEventTask(
+      "NgZoneEvent: " + name,
+      fn,
+      EMPTY_PAYLOAD,
+      noop,
+      noop
+    );
     try {
       return zone.runTask(task, applyThis, applyArgs) as T;
     } finally {
@@ -198,8 +218,16 @@ export class NgZone {
    * Same as `run`, except that synchronous errors are caught and forwarded via `onError` and not
    * rethrown.
    */
-  runGuarded<T>(fn: (...args: any[]) => T, applyThis?: any, applyArgs?: any[]): T {
-    return (this as any as NgZonePrivate)._inner.runGuarded(fn, applyThis, applyArgs) as T;
+  runGuarded<T>(
+    fn: (...args: any[]) => T,
+    applyThis?: any,
+    applyArgs?: any[]
+  ): T {
+    return ((this as any) as NgZonePrivate)._inner.runGuarded(
+      fn,
+      applyThis,
+      applyArgs
+    ) as T;
   }
 
   /**
@@ -216,20 +244,22 @@ export class NgZone {
    * Use {@link #run} to reenter the Angular zone and do work that updates the application model.
    */
   runOutsideAngular<T>(fn: (...args: any[]) => T): T {
-    return (this as any as NgZonePrivate)._outer.run(fn) as T;
+    return ((this as any) as NgZonePrivate)._outer.run(fn) as T;
   }
 }
 
-function noop() { }
+function noop() {}
 const EMPTY_PAYLOAD = {};
 
-
 interface NgZonePrivate extends NgZone {
+  /**没加三个钩子的 */
   _outer: Zone;
+  /**内部默认使用的 */
   _inner: Zone;
   _nesting: number;
 
   hasPendingMicrotasks: boolean;
+  /**false为没有 */
   hasPendingMacrotasks: boolean;
   isStable: boolean;
 }
@@ -254,10 +284,16 @@ function checkStable(zone: NgZonePrivate) {
 
 function forkInnerZoneWithAngularBehavior(zone: NgZonePrivate) {
   zone._inner = zone._inner.fork({
-    name: 'angular',
-    properties: <any>{ 'isAngularZone': true },
-    onInvokeTask: (delegate: ZoneDelegate, current: Zone, target: Zone, task: Task, applyThis: any,
-      applyArgs: any): any => {
+    name: "angular",
+    properties: <any>{ isAngularZone: true },
+    onInvokeTask: (
+      delegate: ZoneDelegate,
+      current: Zone,
+      target: Zone,
+      task: Task,
+      applyThis: any,
+      applyArgs: any
+    ): any => {
       try {
         onEnter(zone);
         return delegate.invokeTask(target, task, applyThis, applyArgs);
@@ -266,9 +302,15 @@ function forkInnerZoneWithAngularBehavior(zone: NgZonePrivate) {
       }
     },
 
-
-    onInvoke: (delegate: ZoneDelegate, current: Zone, target: Zone, callback: Function,
-      applyThis: any, applyArgs?: any[], source?: string): any => {
+    onInvoke: (
+      delegate: ZoneDelegate,
+      current: Zone,
+      target: Zone,
+      callback: Function,
+      applyThis: any,
+      applyArgs?: any[],
+      source?: string
+    ): any => {
       try {
         onEnter(zone);
         return delegate.invoke(target, callback, applyThis, applyArgs, source);
@@ -277,22 +319,31 @@ function forkInnerZoneWithAngularBehavior(zone: NgZonePrivate) {
       }
     },
 
-    onHasTask:
-      (delegate: ZoneDelegate, current: Zone, target: Zone, hasTaskState: HasTaskState) => {
-        delegate.hasTask(target, hasTaskState);
-        if (current === target) {
-          // We are only interested in hasTask events which originate from our zone
-          // (A child hasTask event is not interesting to us)
-          if (hasTaskState.change == 'microTask') {
-            zone.hasPendingMicrotasks = hasTaskState.microTask;
-            checkStable(zone);
-          } else if (hasTaskState.change == 'macroTask') {
-            zone.hasPendingMacrotasks = hasTaskState.macroTask;
-          }
+    onHasTask: (
+      delegate: ZoneDelegate,
+      current: Zone,
+      target: Zone,
+      hasTaskState: HasTaskState
+    ) => {
+      delegate.hasTask(target, hasTaskState);
+      if (current === target) {
+        // We are only interested in hasTask events which originate from our zone
+        // (A child hasTask event is not interesting to us)
+        if (hasTaskState.change == "microTask") {
+          zone.hasPendingMicrotasks = hasTaskState.microTask;
+          checkStable(zone);
+        } else if (hasTaskState.change == "macroTask") {
+          zone.hasPendingMacrotasks = hasTaskState.macroTask;
         }
-      },
+      }
+    },
 
-    onHandleError: (delegate: ZoneDelegate, current: Zone, target: Zone, error: any): boolean => {
+    onHandleError: (
+      delegate: ZoneDelegate,
+      current: Zone,
+      target: Zone,
+      error: any
+    ): boolean => {
       delegate.handleError(target, error);
       zone.runOutsideAngular(() => zone.onError.emit(error));
       return false;
@@ -326,11 +377,19 @@ export class NoopNgZone implements NgZone {
   readonly onStable: EventEmitter<any> = new EventEmitter();
   readonly onError: EventEmitter<any> = new EventEmitter();
 
-  run(fn: () => any): any { return fn(); }
+  run(fn: () => any): any {
+    return fn();
+  }
 
-  runGuarded(fn: () => any): any { return fn(); }
+  runGuarded(fn: () => any): any {
+    return fn();
+  }
 
-  runOutsideAngular(fn: () => any): any { return fn(); }
+  runOutsideAngular(fn: () => any): any {
+    return fn();
+  }
 
-  runTask<T>(fn: () => any): any { return fn(); }
+  runTask<T>(fn: () => any): any {
+    return fn();
+  }
 }

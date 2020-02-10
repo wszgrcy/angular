@@ -18,12 +18,13 @@ import {ResourceLoaderImpl} from './resource_loader/resource_loader_impl';
  * @publicApi
  */
 export const INTERNAL_BROWSER_DYNAMIC_PLATFORM_PROVIDERS: StaticProvider[] = [
+  //doc 平台id,dom适配,单元测试用的,平台跳转,document
   INTERNAL_BROWSER_PLATFORM_PROVIDERS,
   {
     provide: COMPILER_OPTIONS,
-    //doc 一个封装请求资源的get,
-    useValue: {providers: [{provide: ResourceLoader, useClass: ResourceLoaderImpl, deps: []}]},
+    useValue: {providers: [{provide: /**一个封装请求资源的方法*/ResourceLoader, useClass: ResourceLoaderImpl, deps: []}]},
     multi: true
   },
+  //doc 平台id
   {provide: PLATFORM_ID, useValue: PLATFORM_BROWSER_ID},
 ];

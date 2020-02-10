@@ -11,7 +11,7 @@ import {MissingTranslationStrategy, ViewEncapsulation} from './core';
 import {Identifiers} from './identifiers';
 import * as o from './output/output_ast';
 import {noUndefined} from './util';
-
+/**保存编译配置 */
 export class CompilerConfig {
   public defaultEncapsulation: ViewEncapsulation|null;
   public useJit: boolean;

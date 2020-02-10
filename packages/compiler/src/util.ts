@@ -85,6 +85,7 @@ export const SyncAsync = {
     }
     return value;
   },
+  /**使用promise.then执行回调或者直接回调 */
   then: <T, R>(value: SyncAsync<T>, cb: (value: T) => R | Promise<R>| SyncAsync<R>):
             SyncAsync<R> => { return isPromise(value) ? value.then(cb) : cb(value);},
   all: <T>(syncAsyncValues: SyncAsync<T>[]): SyncAsync<T[]> => {
@@ -213,6 +214,7 @@ export function resolveForwardRef(type: any): any {
 
 /**
  * Determine if the argument is shaped like a Promise
+ * 判断是不是promise
  */
 export function isPromise(obj: any): obj is Promise<any> {
   // allow any Promise/A+ compliant thenable.

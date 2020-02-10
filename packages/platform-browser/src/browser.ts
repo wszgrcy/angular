@@ -23,9 +23,11 @@ import { DomSharedStylesHost, SharedStylesHost } from './dom/shared_styles_host'
 import { DomSanitizer, DomSanitizerImpl } from './security/dom_sanitization_service';
 /**启动的时候自动赋予的 */
 export const INTERNAL_BROWSER_PLATFORM_PROVIDERS: StaticProvider[] = [
+  //doc 平台id  可在外部
   { provide: PLATFORM_ID, useValue: PLATFORM_BROWSER_ID },
-  //doc 初始化函数
+  //doc 初始化函数 可在外部
   { provide: PLATFORM_INITIALIZER, useValue: initDomAdapter, multi: true },
+  /**doc 平台location,封装了浏览器的前进后退等 */
   { provide: PlatformLocation, useClass: BrowserPlatformLocation, deps: [DOCUMENT] },
   //doc 在浏览器中就是document
   { provide: DOCUMENT, useFactory: _document, deps: [] },
@@ -49,7 +51,9 @@ export const platformBrowser: (extraProviders?: StaticProvider[]) => PlatformRef
   createPlatformFactory(platformCore, 'browser', INTERNAL_BROWSER_PLATFORM_PROVIDERS);
 
 export function initDomAdapter() {
+  //doc 设置浏览器dom适配器
   BrowserDomAdapter.makeCurrent();
+  //doc 应该是在单元测试中使用
   BrowserGetTestability.init();
 }
 

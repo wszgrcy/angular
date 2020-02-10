@@ -9,7 +9,7 @@
 const promise: Promise<any> = (() => Promise.resolve(0))();
 
 declare const Zone: any;
-
+/**zone或者默认调用 */
 export function scheduleMicroTask(fn: Function) {
   if (typeof Zone === 'undefined') {
     // use promise to schedule microTask instead of use Zone

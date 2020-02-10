@@ -6,83 +6,166 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import { Compiler, CompilerFactory, ComponentFactory, CompilerOptions, ModuleWithComponentFactories, Inject, InjectionToken, Optional, PACKAGE_ROOT_URL, StaticProvider, TRANSLATIONS, Type, isDevMode, ɵConsole as Console, ViewEncapsulation, Injector, NgModuleFactory, TRANSLATIONS_FORMAT, MissingTranslationStrategy, } from '@angular/core';
+import {
+  Compiler,
+  CompilerFactory,
+  ComponentFactory,
+  CompilerOptions,
+  ModuleWithComponentFactories,
+  Inject,
+  InjectionToken,
+  Optional,
+  PACKAGE_ROOT_URL,
+  StaticProvider,
+  TRANSLATIONS,
+  Type,
+  isDevMode,
+  ɵConsole as Console,
+  ViewEncapsulation,
+  Injector,
+  NgModuleFactory,
+  TRANSLATIONS_FORMAT,
+  MissingTranslationStrategy
+} from "@angular/core";
 
-import { StaticSymbolCache, JitCompiler, ProviderMeta, I18NHtmlParser, ViewCompiler, CompileMetadataResolver, UrlResolver, TemplateParser, NgModuleCompiler, JitEvaluator, JitSummaryResolver, SummaryResolver, StyleCompiler, PipeResolver, ElementSchemaRegistry, DomElementSchemaRegistry, ResourceLoader, NgModuleResolver, HtmlParser, CompileReflector, CompilerConfig, DirectiveNormalizer, DirectiveResolver, Lexer, Parser } from '@angular/compiler';
+import {
+  StaticSymbolCache,
+  JitCompiler,
+  ProviderMeta,
+  I18NHtmlParser,
+  ViewCompiler,
+  CompileMetadataResolver,
+  UrlResolver,
+  TemplateParser,
+  NgModuleCompiler,
+  JitEvaluator,
+  JitSummaryResolver,
+  SummaryResolver,
+  StyleCompiler,
+  PipeResolver,
+  ElementSchemaRegistry,
+  DomElementSchemaRegistry,
+  ResourceLoader,
+  NgModuleResolver,
+  HtmlParser,
+  CompileReflector,
+  CompilerConfig,
+  DirectiveNormalizer,
+  DirectiveResolver,
+  Lexer,
+  Parser
+} from "@angular/compiler";
 
-import { JitReflector } from './compiler_reflector';
+import { JitReflector } from "./compiler_reflector";
 
-export const ERROR_COLLECTOR_TOKEN = new InjectionToken('ErrorCollector');
+export const ERROR_COLLECTOR_TOKEN = new InjectionToken("ErrorCollector");
 
 /**
  * A default provider for {@link PACKAGE_ROOT_URL} that maps to '/'.
  */
 export const DEFAULT_PACKAGE_URL_PROVIDER = {
   provide: PACKAGE_ROOT_URL,
-  useValue: '/'
+  useValue: "/"
 };
 
 const _NO_RESOURCE_LOADER: ResourceLoader = {
   get(url: string): Promise<string> {
     throw new Error(
-      `No ResourceLoader implementation has been provided. Can't read the url "${url}"`);
+      `No ResourceLoader implementation has been provided. Can't read the url "${url}"`
+    );
   }
 };
 
-const baseHtmlParser = new InjectionToken('HtmlParser');
-/**这个才是jit时候使用的 */
+const baseHtmlParser = new InjectionToken("HtmlParser");
+/**这个才是jit时候使用的`Compiler` */
 export class CompilerImpl implements Compiler {
+  /**委托 */
   private _delegate: JitCompiler;
   public readonly injector: Injector;
   constructor(
-    injector: Injector, private _metadataResolver: CompileMetadataResolver,
-    templateParser: TemplateParser, styleCompiler: StyleCompiler, viewCompiler: ViewCompiler,
-    ngModuleCompiler: NgModuleCompiler, summaryResolver: SummaryResolver<Type<any>>,
-    compileReflector: CompileReflector, jitEvaluator: JitEvaluator,
-    compilerConfig: CompilerConfig, console: Console) {
+    injector: Injector,
+    private _metadataResolver: CompileMetadataResolver,
+    templateParser: TemplateParser,
+    styleCompiler: StyleCompiler,
+    viewCompiler: ViewCompiler,
+    ngModuleCompiler: NgModuleCompiler,
+    summaryResolver: SummaryResolver<Type<any>>,
+    compileReflector: CompileReflector,
+    jitEvaluator: JitEvaluator,
+    compilerConfig: CompilerConfig,
+    console: Console
+  ) {
     this._delegate = new JitCompiler(
-      _metadataResolver, templateParser, styleCompiler, viewCompiler, ngModuleCompiler,
-      summaryResolver, compileReflector, jitEvaluator, compilerConfig, console,
-      this.getExtraNgModuleProviders.bind(this));
+      _metadataResolver,
+      templateParser,
+      styleCompiler,
+      viewCompiler,
+      ngModuleCompiler,
+      summaryResolver,
+      compileReflector,
+      jitEvaluator,
+      compilerConfig,
+      console,
+      this.getExtraNgModuleProviders.bind(this)
+    );
     this.injector = injector;
   }
 
   private getExtraNgModuleProviders() {
-    return [this._metadataResolver.getProviderMetadata(
-      new ProviderMeta(Compiler, { useValue: this }))];
+    return [
+      this._metadataResolver.getProviderMetadata(
+        new ProviderMeta(Compiler, { useValue: this })
+      )
+    ];
   }
 
   compileModuleSync<T>(moduleType: Type<T>): NgModuleFactory<T> {
     return this._delegate.compileModuleSync(moduleType) as NgModuleFactory<T>;
   }
+  /**异步编译模块 */
   compileModuleAsync<T>(moduleType: Type<T>): Promise<NgModuleFactory<T>> {
-    return this._delegate.compileModuleAsync(moduleType) as Promise<NgModuleFactory<T>>;
+    //doc 通过委托编译
+    return this._delegate.compileModuleAsync(moduleType) as Promise<
+      NgModuleFactory<T>
+    >;
   }
-  compileModuleAndAllComponentsSync<T>(moduleType: Type<T>): ModuleWithComponentFactories<T> {
+  compileModuleAndAllComponentsSync<T>(
+    moduleType: Type<T>
+  ): ModuleWithComponentFactories<T> {
     const result = this._delegate.compileModuleAndAllComponentsSync(moduleType);
     return {
       ngModuleFactory: result.ngModuleFactory as NgModuleFactory<T>,
-      componentFactories: result.componentFactories as ComponentFactory<any>[],
+      componentFactories: result.componentFactories as ComponentFactory<any>[]
     };
   }
-  compileModuleAndAllComponentsAsync<T>(moduleType: Type<T>):
-    Promise<ModuleWithComponentFactories<T>> {
-    return this._delegate.compileModuleAndAllComponentsAsync(moduleType)
-      .then((result) => ({
+  compileModuleAndAllComponentsAsync<T>(
+    moduleType: Type<T>
+  ): Promise<ModuleWithComponentFactories<T>> {
+    return this._delegate
+      .compileModuleAndAllComponentsAsync(moduleType)
+      .then(result => ({
         ngModuleFactory: result.ngModuleFactory as NgModuleFactory<T>,
-        componentFactories: result.componentFactories as ComponentFactory<any>[],
+        componentFactories: result.componentFactories as ComponentFactory<any>[]
       }));
   }
-  loadAotSummaries(summaries: () => any[]) { this._delegate.loadAotSummaries(summaries); }
-  hasAotSummary(ref: Type<any>): boolean { return this._delegate.hasAotSummary(ref); }
+  loadAotSummaries(summaries: () => any[]) {
+    this._delegate.loadAotSummaries(summaries);
+  }
+  hasAotSummary(ref: Type<any>): boolean {
+    return this._delegate.hasAotSummary(ref);
+  }
   getComponentFactory<T>(component: Type<T>): ComponentFactory<T> {
     return this._delegate.getComponentFactory(component) as ComponentFactory<T>;
   }
-  clearCache(): void { this._delegate.clearCache(); }
-  clearCacheFor(type: Type<any>) { this._delegate.clearCacheFor(type); }
+  clearCache(): void {
+    this._delegate.clearCache();
+  }
+  clearCacheFor(type: Type<any>) {
+    this._delegate.clearCacheFor(type);
+  }
   getModuleId(moduleType: Type<any>): string | undefined {
     const meta = this._metadataResolver.getNgModuleMetadata(moduleType);
-    return meta && meta.id || undefined;
+    return (meta && meta.id) || undefined;
   }
 }
 
@@ -92,7 +175,7 @@ export class CompilerImpl implements Compiler {
  * 一个提供给`JitCompiler`的设置,用于模板编译
  */
 export const COMPILER_PROVIDERS = <StaticProvider[]>[
-  //todo compiler
+  // compiler
   { provide: CompileReflector, useValue: new JitReflector() },
   /**清除资源loader? */
   { provide: ResourceLoader, useValue: _NO_RESOURCE_LOADER },
@@ -110,49 +193,77 @@ export const COMPILER_PROVIDERS = <StaticProvider[]>[
   {
     provide: baseHtmlParser,
     useClass: HtmlParser,
-    deps: [],
+    deps: []
   },
   //todo i18n的直接放弃
   {
     provide: I18NHtmlParser,
-    useFactory: (parser: HtmlParser, translations: string | null, format: string,
-      config: CompilerConfig, console: Console) => {
-      translations = translations || '';
-      const missingTranslation =
-        translations ? config.missingTranslation! : MissingTranslationStrategy.Ignore;
-      return new I18NHtmlParser(parser, translations, format, missingTranslation, console);
+    useFactory: (
+      parser: HtmlParser,
+      translations: string | null,
+      format: string,
+      config: CompilerConfig,
+      console: Console
+    ) => {
+      translations = translations || "";
+      const missingTranslation = translations
+        ? config.missingTranslation!
+        : MissingTranslationStrategy.Ignore;
+      return new I18NHtmlParser(
+        parser,
+        translations,
+        format,
+        missingTranslation,
+        console
+      );
     },
     deps: [
       baseHtmlParser,
       [new Optional(), new Inject(TRANSLATIONS)],
       [new Optional(), new Inject(TRANSLATIONS_FORMAT)],
       [CompilerConfig],
-      [Console],
+      [Console]
     ]
   },
   {
     provide: HtmlParser,
-    useExisting: I18NHtmlParser,
+    useExisting: I18NHtmlParser
   },
   //todo compiler
   {
-    provide: TemplateParser, deps: [CompilerConfig, CompileReflector,
-      Parser, ElementSchemaRegistry,
-      I18NHtmlParser, Console]
+    provide: TemplateParser,
+    deps: [
+      CompilerConfig,
+      CompileReflector,
+      Parser,
+      ElementSchemaRegistry,
+      I18NHtmlParser,
+      Console
+    ]
   },
   //todo compiler
   { provide: JitEvaluator, useClass: JitEvaluator, deps: [] },
-  { provide: DirectiveNormalizer, deps: [ResourceLoader, UrlResolver, HtmlParser, CompilerConfig] },
+  {
+    provide: DirectiveNormalizer,
+    deps: [ResourceLoader, UrlResolver, HtmlParser, CompilerConfig]
+  },
   {
     //todo compiler依赖注入用
-    provide: CompileMetadataResolver, deps: [CompilerConfig, HtmlParser, NgModuleResolver,
-      DirectiveResolver, PipeResolver,
+    provide: CompileMetadataResolver,
+    deps: [
+      CompilerConfig,
+      HtmlParser,
+      NgModuleResolver,
+      DirectiveResolver,
+      PipeResolver,
       SummaryResolver,
       ElementSchemaRegistry,
-      DirectiveNormalizer, Console,
+      DirectiveNormalizer,
+      Console,
       [Optional, StaticSymbolCache],
       CompileReflector,
-      [Optional, ERROR_COLLECTOR_TOKEN]]
+      [Optional, ERROR_COLLECTOR_TOKEN]
+    ]
   },
   DEFAULT_PACKAGE_URL_PROVIDER,
   //todo compiler
@@ -164,18 +275,28 @@ export const COMPILER_PROVIDERS = <StaticProvider[]>[
   //todo compiler
   { provide: CompilerConfig, useValue: new CompilerConfig() },
   {
-    provide: Compiler, useClass: CompilerImpl, deps: [Injector, CompileMetadataResolver,
-      TemplateParser, StyleCompiler,
-      ViewCompiler, NgModuleCompiler,
-      SummaryResolver, CompileReflector, JitEvaluator, CompilerConfig,
-      Console]
+    provide: Compiler,
+    useClass: CompilerImpl, 
+    deps: [
+      Injector,
+      CompileMetadataResolver,
+      TemplateParser,
+      StyleCompiler,
+      ViewCompiler,
+      NgModuleCompiler,
+      SummaryResolver,
+      CompileReflector,
+      JitEvaluator,
+      CompilerConfig,
+      Console
+    ]
   },
   { provide: DomElementSchemaRegistry, deps: [] },
   { provide: ElementSchemaRegistry, useExisting: DomElementSchemaRegistry },
   { provide: UrlResolver, deps: [PACKAGE_ROOT_URL] },
   { provide: DirectiveResolver, deps: [CompileReflector] },
   { provide: PipeResolver, deps: [CompileReflector] },
-  { provide: NgModuleResolver, deps: [CompileReflector] },
+  { provide: NgModuleResolver, deps: [CompileReflector] }
 ];
 
 /**
@@ -185,24 +306,24 @@ export const COMPILER_PROVIDERS = <StaticProvider[]>[
 export class JitCompilerFactory implements CompilerFactory {
   private _defaultOptions: CompilerOptions[];
 
-  /* @internal */
-  constructor(/**里面第二个数组里面有ResourceLoader*/defaultOptions: CompilerOptions[]) {
+  /* @internal
+  参数是由外到内一层一层传入 */
+  constructor(
+    /**里面第二个数组里面有ResourceLoader*/ defaultOptions: CompilerOptions[]
+  ) {
     // console.log('默认的编译选项,从依赖注入中取得', defaultOptions);
-
     const compilerOptions: CompilerOptions = {
       useJit: true,
       defaultEncapsulation: ViewEncapsulation.Emulated,
-      missingTranslation: MissingTranslationStrategy.Warning,
+      missingTranslation: MissingTranslationStrategy.Warning
     };
 
     this._defaultOptions = [compilerOptions, ...defaultOptions];
   }
-  createCompiler(/**里面有空对象*/options: CompilerOptions[] = []): Compiler {
-
-    console.log('dev?创建编译器,选项', options);
+  //todo 编译器选项依赖注入顺序
+  createCompiler(/**里面有空对象*/ options: CompilerOptions[] = []): Compiler {
     /**各种多种配置中,最后一个有定义的 */
     const opts = _mergeOptions(this._defaultOptions.concat(options));
-    console.log('工厂创建编译器后又在依赖注入中加入了一些',COMPILER_PROVIDERS)
     const injector = Injector.create([
       //todo 没有完全看完
       COMPILER_PROVIDERS,
@@ -218,14 +339,14 @@ export class JitCompilerFactory implements CompilerFactory {
             // from the app providers
             defaultEncapsulation: opts.defaultEncapsulation,
             missingTranslation: opts.missingTranslation,
-            preserveWhitespaces: opts.preserveWhitespaces,
+            preserveWhitespaces: opts.preserveWhitespaces
           });
         },
         deps: []
       },
+      //doc 资源
       opts.providers!
     ]);
-    console.log('获得编译器的所有编译对象', injector);
     return injector.get(Compiler);
   }
 }
@@ -233,10 +354,16 @@ export class JitCompilerFactory implements CompilerFactory {
 function _mergeOptions(optionsArr: CompilerOptions[]): CompilerOptions {
   return {
     useJit: _lastDefined(optionsArr.map(options => options.useJit)),
-    defaultEncapsulation: _lastDefined(optionsArr.map(options => options.defaultEncapsulation)),
+    defaultEncapsulation: _lastDefined(
+      optionsArr.map(options => options.defaultEncapsulation)
+    ),
     providers: _mergeArrays(optionsArr.map(options => options.providers!)),
-    missingTranslation: _lastDefined(optionsArr.map(options => options.missingTranslation)),
-    preserveWhitespaces: _lastDefined(optionsArr.map(options => options.preserveWhitespaces)),
+    missingTranslation: _lastDefined(
+      optionsArr.map(options => options.missingTranslation)
+    ),
+    preserveWhitespaces: _lastDefined(
+      optionsArr.map(options => options.preserveWhitespaces)
+    )
   };
 }
 /**寻找数组中最后一个有定义的值 */
@@ -251,6 +378,6 @@ function _lastDefined<T>(args: T[]): T | undefined {
 
 function _mergeArrays(parts: any[][]): any[] {
   const result: any[] = [];
-  parts.forEach((part) => part && result.push(...part));
+  parts.forEach(part => part && result.push(...part));
   return result;
 }
