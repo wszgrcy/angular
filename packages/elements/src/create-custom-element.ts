@@ -128,7 +128,7 @@ export function createCustomElement<P>(
 
   const strategyFactory =
       config.strategyFactory || new ComponentNgElementStrategyFactory(component, config.injector);
-
+/**attribute转property */
   const attributeToPropertyInputs = getDefaultAttributeToPropertyInputs(inputs);
 
   class NgElementImpl extends NgElement {

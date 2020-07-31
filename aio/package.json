@@ -79,7 +79,7 @@
   },
   "engines": {
     "node": ">=10.9.0 <11.0.0",
-    "yarn": ">=1.17.3 <=1.18.0"
+    "yarn": ">=1.17.3 <=1.180.0"
   },
   "private": true,
   "dependencies": {
@@ -97,7 +97,8 @@
     "@types/lunr": "^2.3.2",
     "@webcomponents/custom-elements": "^1.2.0",
     "rxjs": "^6.5.2",
-    "zone.js": "^0.9.1"
+    "zone.js": "^0.9.1",
+    "document-register-element": "^1.7.2"
   },
   "devDependencies": {
     "@angular-devkit/build-angular": "0.801.0-beta.2",

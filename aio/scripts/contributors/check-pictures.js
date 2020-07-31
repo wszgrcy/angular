@@ -13,6 +13,7 @@ const CONTRIBUTORS_PATH = join(CONTENT_DIR, 'marketing/contributors.json');
 _main();
 
 // Functions - Definitions
+/**判断相关图片是否丢失(ng贡献者的?) */
 function _main() {
   const contributors = JSON.parse(readFileSync(CONTRIBUTORS_PATH, 'utf8'));
   const expectedImages = Object.keys(contributors)

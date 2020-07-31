@@ -10,11 +10,13 @@ const PackageJsonCustomizer = require('./customizer/package-json/packageJsonCust
 const regionExtractor = require('../transforms/examples-package/services/region-parser');
 
 const EXAMPLE_CONFIG_NAME = 'example-config.json';
-
+/**把例子压缩成压缩包 */
 class ExampleZipper {
-  constructor(sourceDirName, outputDirName) {
+  constructor (sourceDirName, outputDirName) {
     this.examplesPackageJson = path.join(__dirname, '../examples/shared/package.json');
+    /**应该废弃了 */
     this.examplesSystemjsConfig = path.join(__dirname, '../examples/shared/boilerplate/systemjs/src/systemjs.config.js');
+    /**应该废弃了 */
     this.examplesSystemjsLoaderConfig = path.join(__dirname, '../examples/shared/boilerplate/systemjs/src/systemjs-angular-loader.js');
     this.exampleTsconfig = path.join(__dirname, '../examples/shared/boilerplate/systemjs/src/tsconfig.json');
     this.customizer = new PackageJsonCustomizer();
@@ -152,7 +154,7 @@ class ExampleZipper {
 
     Array.prototype.push.apply(gpaths, alwaysExcludes);
 
-    let fileNames = globby.sync(gpaths, { ignore: ['**/node_modules/**']});
+    let fileNames = globby.sync(gpaths, { ignore: ['**/node_modules/**'] });
 
     let zip = this._createZipArchive(outputFileName);
     fileNames.forEach((fileName) => {
@@ -164,7 +166,7 @@ class ExampleZipper {
       // zip.append(fs.createReadStream(fileName), { name: relativePath });
       let output = regionExtractor()(content, extn).contents;
 
-      zip.append(output, { name: relativePath } )
+      zip.append(output, { name: relativePath })
     });
 
     // we need the package.json from _examples root, not the _boilerplate one
@@ -175,7 +177,7 @@ class ExampleZipper {
       zip.append(fs.readFileSync(this.examplesSystemjsLoaderConfig, 'utf8'), { name: 'src/systemjs-angular-loader.js' });
       // a modified tsconfig
       let tsconfig = fs.readFileSync(this.exampleTsconfig, 'utf8');
-      zip.append(this._changeTypeRoots(tsconfig), {name: 'src/tsconfig.json'});
+      zip.append(this._changeTypeRoots(tsconfig), { name: 'src/tsconfig.json' });
     }
 
     zip.finalize();

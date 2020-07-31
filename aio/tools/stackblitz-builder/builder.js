@@ -11,7 +11,7 @@ var globby = require('globby');
 var regionExtractor = require('../transforms/examples-package/services/region-parser');
 
 class StackblitzBuilder {
-  constructor(basePath, destPath) {
+  constructor (basePath, destPath) {
     this.basePath = basePath;
     this.destPath = destPath;
 
@@ -28,7 +28,7 @@ class StackblitzBuilder {
 
     this._buildCopyrightStrings();
   }
-
+  /**这个build就是把保存的那些example格式化成可以直接调用stackblitz的html输出 */
   build() {
     this._checkForOutdatedConfig();
 
@@ -45,15 +45,15 @@ class StackblitzBuilder {
       }
     });
   }
-
+  /**添加依赖 */
   _addDependencies(postData) {
     postData['dependencies'] = JSON.stringify(this.examplePackageDependencies);
   }
-
+  /**版权信息 */
   _buildCopyrightStrings() {
     var copyright = 'Copyright Google LLC. All Rights Reserved.\n' +
-        'Use of this source code is governed by an MIT-style license that\n' +
-        'can be found in the LICENSE file at http://angular.io/license';
+      'Use of this source code is governed by an MIT-style license that\n' +
+      'can be found in the LICENSE file at http://angular.io/license';
     var pad = '\n\n';
     this.copyrights.jsCss = `${pad}/*\n${copyright}\n*/`;
     this.copyrights.html = `${pad}<!-- \n${copyright}\n-->`;
@@ -72,18 +72,23 @@ class StackblitzBuilder {
     outputFileName = configFileName.replace(/stackblitz\.json$/, outputFileName);
     var altFileName;
     if (this.destPath && this.destPath.length > 0) {
+      /**文件夹的名字(理论上是一级的) */
       var partPath = path.dirname(path.relative(this.basePath, outputFileName));
+      /**生成文件夹中的文件名 */
       var altFileName = path.join(this.destPath, partPath, path.basename(outputFileName)).replace('.no-link.', '.');
     }
     try {
+      /**把配置文件的相关配置搞出来 */
       var config = this._initConfigAndCollectFileNames(configFileName);
       var postData = this._createPostData(config, configFileName);
       this._addDependencies(postData);
       var html = this._createStackblitzHtml(config, postData);
+      //doc 内容写成html文件
       fs.writeFileSync(outputFileName, html, 'utf-8');
       if (altFileName) {
         var altDirName = path.dirname(altFileName);
         fs.ensureDirSync(altDirName);
+        //doc 同样的文件写了两次?
         fs.writeFileSync(altFileName, html, 'utf-8');
       }
     } catch (e) {
@@ -97,7 +102,7 @@ class StackblitzBuilder {
       throw e;
     }
   }
-
+  /**保证没有使用过时配置 */
   _checkForOutdatedConfig() {
     // Ensure that nobody is trying to use the old config filenames (i.e. `plnkr.json`).
     var plunkerPaths = path.join(this.basePath, '**/*plnkr.json');
@@ -106,16 +111,16 @@ class StackblitzBuilder {
     if (fileNames.length) {
       const readmePath = path.join(__dirname, 'README.md');
       const errorMessage =
-          'One or more examples are still trying to use \'plnkr.json\' files for configuring ' +
-          'live examples. This is not supported any more. \'stackblitz.json\' should be used ' +
-          'instead.\n' +
-          `(Slight modifications may be required. See '${readmePath}' for more info.\n\n` +
-          fileNames.map(name => `- ${name}`).join('\n');
+        'One or more examples are still trying to use \'plnkr.json\' files for configuring ' +
+        'live examples. This is not supported any more. \'stackblitz.json\' should be used ' +
+        'instead.\n' +
+        `(Slight modifications may be required. See '${readmePath}' for more info.\n\n` +
+        fileNames.map(name => `- ${name}`).join('\n');
 
       throw Error(errorMessage);
     }
   }
-
+  /**创建基础 StackblitzHtml */
   _createBaseStackblitzHtml(config) {
     var file = '';
 
@@ -143,7 +148,7 @@ class StackblitzBuilder {
     return html;
   }
 
-  _createPostData(config, configFileName) {
+  _createPostData(/**配置*/config,/**配置文件名 */ configFileName) {
     var postData = {};
 
     // If `config.main` is specified, ensure that it points to an existing file.
@@ -152,6 +157,7 @@ class StackblitzBuilder {
     }
 
     config.fileNames.forEach((fileName) => {
+      /**读文件的内容 */
       var content;
       var extn = path.extname(fileName);
       if (extn == '.png') {
@@ -160,7 +166,7 @@ class StackblitzBuilder {
       } else {
         content = fs.readFileSync(fileName, 'utf-8');
       }
-
+      //doc 增加版权信息
       if (extn == '.js' || extn == '.ts' || extn == '.css') {
         content = content + this.copyrights.jsCss;
       } else if (extn == '.html') {
@@ -169,7 +175,6 @@ class StackblitzBuilder {
       // var escapedValue = escapeHtml(content);
 
       var relativeFileName = path.relative(config.basePath, fileName);
-
       // Is the main a custom index-xxx.html file? Rename it
       if (relativeFileName == config.main) {
         relativeFileName = 'src/index.html';
@@ -191,12 +196,11 @@ class StackblitzBuilder {
       }
 
       content = regionExtractor()(content, extn.substr(1)).contents;
-
       postData[`files[${relativeFileName}]`] = content;
     });
 
     var tags = ['angular', 'example'].concat(config.tags || []);
-    tags.forEach(function(tag,ix) {
+    tags.forEach(function (tag, ix) {
       postData['tags[' + ix + ']'] = tag;
     });
 
@@ -204,13 +208,14 @@ class StackblitzBuilder {
 
     return postData;
   }
-
+  /**插入到表单中?这个html可以直接跳转到stackblitz中,然后里面赋值是能显示文件结构 */
   _createStackblitzHtml(config, postData) {
     var baseHtml = this._createBaseStackblitzHtml(config);
     var doc = jsdom.jsdom(baseHtml);
     var form = doc.querySelector('form');
     _.forEach(postData, (value, key) => {
       var ele = this._htmlToElement(doc, '<input type="hidden" name="' + key + '">');
+      //doc 设置的就是文件内容
       ele.setAttribute('value', value);
       form.appendChild(ele)
     });
@@ -228,11 +233,11 @@ class StackblitzBuilder {
     try {
       fs.accessSync(filename);
       return true;
-    } catch(ex) {
+    } catch (ex) {
       return false;
     }
   }
-
+  /**创建一个元素 */
   _htmlToElement(document, html) {
     var div = document.createElement('div');
     div.innerHTML = html;
@@ -240,10 +245,13 @@ class StackblitzBuilder {
   }
 
   _initConfigAndCollectFileNames(configFileName) {
+    /**配置文件目录 */
     var configDir = path.dirname(configFileName);
+    /**读的配置文件string */
     var configSrc = fs.readFileSync(configFileName, 'utf-8');
     try {
       var config = (configSrc && configSrc.trim().length) ? JSON.parse(configSrc) : {};
+      //doc 基路径
       config.basePath = configDir; // assumes 'stackblitz.json' is at `/src` level.
     } catch (e) {
       throw new Error(`Stackblitz config - unable to parse json file: ${configFileName}\n${e}`);
@@ -254,20 +262,23 @@ class StackblitzBuilder {
     if (config.files) {
       if (config.files.length > 0) {
         if (config.files[0].substr(0, 1) == '!') {
+          //doc 追加默认
           config.files = defaultIncludes.concat(config.files);
         }
       }
     } else {
       config.files = defaultIncludes;
     }
+    //doc 追加环境及相关文件
     config.files = config.files.concat(boilerplateIncludes);
 
     var includeSpec = false;
-    var gpaths = config.files.map(function(fileName) {
+    var gpaths = config.files.map(function (fileName) {
       fileName = fileName.trim();
-      if (fileName.substr(0,1) == '!') {
+      if (fileName.substr(0, 1) == '!') {
         return '!' + path.join(config.basePath, fileName.substr(1));
       } else {
+        //doc 判断有没有测试
         includeSpec = includeSpec || /\.spec\.(ts|js)$/.test(fileName);
         return path.join(config.basePath, fileName);
       }
@@ -290,11 +301,11 @@ class StackblitzBuilder {
 
     // exclude all specs if no spec is mentioned in `files[]`
     if (!includeSpec) {
-      defaultExcludes.push('!**/*.spec.*','!**/spec.js');
+      defaultExcludes.push('!**/*.spec.*', '!**/spec.js');
     }
 
     gpaths.push(...defaultExcludes);
-
+    //doc 包含的文件,真实路径
     config.fileNames = globby.sync(gpaths, { ignore: ["**/node_modules/**"] });
 
     return config;

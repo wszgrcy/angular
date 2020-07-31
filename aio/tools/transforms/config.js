@@ -2,6 +2,7 @@ const { resolve } = require('path');
 const { readdirSync } = require('fs');
 
 const PROJECT_ROOT = resolve(__dirname, '../../..');
+console.log('项目目录', PROJECT_ROOT, __dirname)
 const AIO_PATH = resolve(PROJECT_ROOT, 'aio');
 const TEMPLATES_PATH = resolve(AIO_PATH, 'tools/transforms/templates');
 const API_TEMPLATES_PATH = resolve(TEMPLATES_PATH, 'api');

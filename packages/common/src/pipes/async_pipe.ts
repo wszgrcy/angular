@@ -85,8 +85,8 @@ export class AsyncPipe implements OnDestroy, PipeTransform {
   /**
    * 存在订阅时,生命周期结束修改
    *
-   * @author cyia
-   * @date 2019-11-03
+   * 
+   * 
    */
   ngOnDestroy(): void {
     if (this._subscription) {

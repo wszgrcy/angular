@@ -15,6 +15,7 @@ module.exports =
     new Package('angular-api', [basePackage, typeScriptPackage])
 
         // Register the processors
+        //doc 处理注释中的描述
         .processor(require('./processors/splitDescription'))
         .processor(require('./processors/convertPrivateClassesToInterfaces'))
         .processor(require('./processors/generateApiListDoc'))
