@@ -70,11 +70,9 @@ When all requested services have been resolved and returned, Angular can call th
 
 The process of `HeroService` injection looks something like this.
 
-<figure class="lightbox">
-  <div class="card">
-    <img src="generated/images/guide/architecture/injector-injects.png" alt="Service" class="left">
-  </div>
-</figure>
+<div class="lightbox">
+  <img src="generated/images/guide/architecture/injector-injects.png" alt="Service" class="left">
+</div>
 
 ### Providing services
 
@@ -95,9 +93,9 @@ or in the `@NgModule()` or `@Component()` metadata
    When you provide the service at the root level, Angular creates a single, shared instance of `HeroService`
    and injects it into any class that asks for it.
    Registering the provider in the `@Injectable()` metadata also allows Angular to optimize an app
-   by removing the service from the compiled app if it isn't used.
+   by removing the service from the compiled app if it isn't used, a process known as *tree-shaking*.
 
-* When you register a provider with a [specific NgModule](guide/architecture-modules), the same instance of a service is available to all components in that NgModule. To register at this level, use the `providers` property of the `@NgModule()` decorator,
+* When you register a provider with a [specific NgModule](guide/architecture-modules), the same instance of a service is available to all components in that NgModule. To register at this level, use the `providers` property of the `@NgModule()` decorator.
 
    ```
    @NgModule({

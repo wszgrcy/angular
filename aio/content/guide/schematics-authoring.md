@@ -1,4 +1,4 @@
-# Authoring Schematics
+# Authoring schematics
 
 You can create your own schematics to operate on Angular projects.
 Library developers typically package schematics with their libraries in order to integrate them with the Angular CLI.
@@ -89,7 +89,7 @@ For example, the hypothetical "Hello World" schematic might have the following s
 </code-example>
 
 
-You can see examples of schema files for the Angular CLI command schematics in [`@schematics/angular`](https://github.com/angular/angular-cli/blob/7.0.x/packages/schematics/angular/application/schema.json).
+You can see examples of schema files for the Angular CLI command schematics in [`@schematics/angular`](https://github.com/angular/angular-cli/blob/master/packages/schematics/angular/application/schema.json).
 
 ### Schematic prompts
 
@@ -207,8 +207,8 @@ By using the long form, the schematic can provide more explicit formatting of th
           { "value": "css",  "label": "CSS" },
           { "value": "scss", "label": "SCSS   [ https://sass-lang.com/documentation/syntax#scss                ]" },
           { "value": "sass", "label": "Sass   [ https://sass-lang.com/documentation/syntax#the-indented-syntax ]" },
-          { "value": "less", "label": "Less   [ http://lesscss.org                                             ]" },
-          { "value": "styl", "label": "Stylus [ http://stylus-lang.com                                         ]" }
+          { "value": "less", "label": "Less   [ http://lesscss.org/                                            ]" },
+          { "value": "styl", "label": "Stylus [ https://stylus-lang.com/                                       ]" }
         ]
       },
     },
@@ -359,11 +359,9 @@ When you add a new named schematic to this collection, it is automatically added
 In addition to the name and description, each schematic has a `factory` property that identifies the schematic’s entry point.
 In the example, you invoke the schematic's defined functionality by calling the `helloWorld()` function in the main file,  `hello-world/index.ts`.
 
-<figure class="lightbox">
-  <div class="card">
-    <img src="generated/images/guide/schematics/collection-files.gif" alt="overview">
-  </div>
-</figure>
+<div class="lightbox">
+  <img src="generated/images/guide/schematics/collection-files.gif" alt="overview">
+</div>
 
 Each named schematic in the collection has the following main parts.
 

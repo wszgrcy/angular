@@ -9,6 +9,7 @@ ts_library(
     ),
     deps = [
         "//packages/core",
+        "//packages/core/src/util",
         "@npm//@types/jasmine",
         "@npm//@types/node",
     ],
@@ -32,6 +33,19 @@ ng_rollup_bundle(
 ng_benchmark(
     name = "class_binding",
     bundle = ":class_binding_lib",
+)
+
+ng_rollup_bundle(
+    name = "directive_inputs_lib",
+    entry_point = ":directive_inputs/index.ts",
+    deps = [
+        ":perf_lib",
+    ],
+)
+
+ng_benchmark(
+    name = "directive_inputs",
+    bundle = ":directive_inputs_lib",
 )
 
 ng_rollup_bundle(
@@ -175,4 +189,82 @@ ng_rollup_bundle(
 ng_benchmark(
     name = "map_based_style_and_class_bindings",
     bundle = ":map_based_style_and_class_bindings_lib",
+)
+
+ng_rollup_bundle(
+    name = "duplicate_style_and_class_bindings_lib",
+    entry_point = ":duplicate_style_and_class_bindings/index.ts",
+    deps = [
+        ":perf_lib",
+    ],
+)
+
+ng_benchmark(
+    name = "duplicate_style_and_class_bindings",
+    bundle = ":duplicate_style_and_class_bindings_lib",
+)
+
+ng_rollup_bundle(
+    name = "duplicate_map_based_style_and_class_bindings_lib",
+    entry_point = ":duplicate_map_based_style_and_class_bindings/index.ts",
+    deps = [
+        ":perf_lib",
+    ],
+)
+
+ng_benchmark(
+    name = "duplicate_map_based_style_and_class_bindings",
+    bundle = ":duplicate_map_based_style_and_class_bindings_lib",
+)
+
+ng_rollup_bundle(
+    name = "host_binding_lib",
+    entry_point = ":host_binding/index.ts",
+    deps = [
+        ":perf_lib",
+    ],
+)
+
+ng_benchmark(
+    name = "host_binding",
+    bundle = ":host_binding_lib",
+)
+
+ng_rollup_bundle(
+    name = "i18n_lib",
+    entry_point = ":i18n/index.ts",
+    deps = [
+        ":perf_lib",
+    ],
+)
+
+ng_benchmark(
+    name = "i18n",
+    bundle = ":i18n_lib",
+)
+
+ng_rollup_bundle(
+    name = "view_destroy_hook_lib",
+    entry_point = ":view_destroy_hook/index.ts",
+    deps = [
+        ":perf_lib",
+    ],
+)
+
+ng_benchmark(
+    name = "view_destroy_hook",
+    bundle = ":view_destroy_hook_lib",
+)
+
+ng_rollup_bundle(
+    name = "render_stringify_lib",
+    entry_point = ":render_stringify/index.ts",
+    deps = [
+        ":perf_lib",
+    ],
+)
+
+ng_benchmark(
+    name = "render_stringify",
+    bundle = ":render_stringify_lib",
 )

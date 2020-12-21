@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright Google Inc. All Rights Reserved.
+ * Copyright Google LLC All Rights Reserved.
  *
  * Use of this source code is governed by an MIT-style license that can be
  * found in the LICENSE file at https://angular.io/license
@@ -22,9 +22,10 @@ import {ClassProvider, ConstructorProvider, ExistingProvider, FactoryProvider, S
  * `InjectorDef`, `NgModule`, or a special scope (e.g. `'root'`). A value of `null` indicates
  * that the injectable does not belong to any scope.
  *
- * NOTE: This is a private type and should not be exported
- *
- * @publicApi
+ * @codeGenApi
+ * @publicApi The ViewEngine compiler emits code with this type for injectables. This code is
+ *   deployed to npm, and should be treated as public api.
+
  */
 export interface ɵɵInjectableDef<T> {
   /**
@@ -65,7 +66,7 @@ export interface ɵɵInjectableDef<T> {
  *
  * NOTE: This is a private type and should not be exported
  *
- * @publicApi
+ * @codeGenApi
  */
 export interface ɵɵInjectorDef<T> {
   factory: () => T;
@@ -137,20 +138,22 @@ export interface InjectorTypeWithProviders<T> {
  *   The factory can call `inject` to access the `Injector` and request injection of dependencies.
  *
  * @codeGenApi
+ * @publicApi This instruction has been emitted by ViewEngine for some time and is deployed to npm.
  */
 export function ɵɵdefineInjectable<T>(opts: {
   token: unknown,
-  providedIn?: Type<any>| 'root' | 'platform' | 'any' | null,
-  factory: () => T,
+  providedIn?: Type<any>|'root'|'platform'|'any'|null, factory: () => T,
 }): never {
   return ({
-    token: opts.token, providedIn: opts.providedIn as any || null, factory: opts.factory,
-        value: undefined,
-  } as ɵɵInjectableDef<T>) as never;
+           token: opts.token,
+           providedIn: opts.providedIn as any || null,
+           factory: opts.factory,
+           value: undefined,
+         } as ɵɵInjectableDef<T>) as never;
 }
 
 /**
- * @deprecated in v8, delete after v10. This API should be used only be generated code, and that
+ * @deprecated in v8, delete after v10. This API should be used only by generated code, and that
  * code should now use ɵɵdefineInjectable instead.
  * @publicApi
  */
@@ -174,13 +177,15 @@ export const defineInjectable = ɵɵdefineInjectable;
  *   whose providers will also be added to the injector. Locally provided types will override
  *   providers from imports.
  *
- * @publicApi
+ * @codeGenApi
  */
 export function ɵɵdefineInjector(options: {factory: () => any, providers?: any[], imports?: any[]}):
     never {
   return ({
-    factory: options.factory, providers: options.providers || [], imports: options.imports || [],
-  } as ɵɵInjectorDef<any>) as never;
+           factory: options.factory,
+           providers: options.providers || [],
+           imports: options.imports || [],
+         } as ɵɵInjectorDef<any>) as never;
 }
 
 /**
@@ -190,15 +195,15 @@ export function ɵɵdefineInjector(options: {factory: () => any, providers?: any
  * @param type A type which may have its own (non-inherited) `ɵprov`.
  */
 export function getInjectableDef<T>(type: any): ɵɵInjectableDef<T>|null {
-  const def = (type[NG_PROV_DEF] || type[NG_INJECTABLE_DEF]) as ɵɵInjectableDef<T>;
-  // The definition read above may come from a base class. `hasOwnProperty` is not sufficient to
-  // distinguish this case, as in older browsers (e.g. IE10) static property inheritance is
-  // implemented by copying the properties.
-  //
-  // Instead, the ɵprov's token is compared to the type, and if they don't match then the
-  // property was not defined directly on the type itself, and was likely inherited. The definition
-  // is only returned if the type matches the def.token.
-  return def && def.token === type ? def : null;
+  return getOwnDefinition(type, NG_PROV_DEF) || getOwnDefinition(type, NG_INJECTABLE_DEF);
+}
+
+/**
+ * Return definition only if it is defined directly on `type` and is not inherited from a base
+ * class of `type`.
+ */
+function getOwnDefinition<T>(type: any, field: string): ɵɵInjectableDef<T>|null {
+  return type.hasOwnProperty(field) ? type[field] : null;
 }
 
 /**
@@ -206,21 +211,41 @@ export function getInjectableDef<T>(type: any): ɵɵInjectableDef<T>|null {
  *
  * @param type A type which may have `ɵprov`, via inheritance.
  *
- * @deprecated Will be removed in v10, where an error will occur in the scenario if we find the
- * `ɵprov` on an ancestor only.
+ * @deprecated Will be removed in a future version of Angular, where an error will occur in the
+ *     scenario if we find the `ɵprov` on an ancestor only.
  */
 export function getInheritedInjectableDef<T>(type: any): ɵɵInjectableDef<T>|null {
   const def = type && (type[NG_PROV_DEF] || type[NG_INJECTABLE_DEF]);
+
   if (def) {
+    const typeName = getTypeName(type);
     // TODO(FW-1307): Re-add ngDevMode when closure can handle it
     // ngDevMode &&
     console.warn(
-        `DEPRECATED: DI is instantiating a token "${type.name}" that inherits its @Injectable decorator but does not provide one itself.\n` +
-        `This will become an error in v10. Please add @Injectable() to the "${type.name}" class.`);
+        `DEPRECATED: DI is instantiating a token "${
+            typeName}" that inherits its @Injectable decorator but does not provide one itself.\n` +
+        `This will become an error in a future version of Angular. Please add @Injectable() to the "${
+            typeName}" class.`);
     return def;
   } else {
     return null;
   }
+}
+
+/** Gets the name of a type, accounting for some cross-browser differences. */
+function getTypeName(type: any): string {
+  // `Function.prototype.name` behaves differently between IE and other browsers. In most browsers
+  // it'll always return the name of the function itself, no matter how many other functions it
+  // inherits from. On IE the function doesn't have its own `name` property, but it takes it from
+  // the lowest level in the prototype chain. E.g. if we have `class Foo extends Parent` most
+  // browsers will evaluate `Foo.name` to `Foo` while IE will return `Parent`. We work around
+  // the issue by converting the function to a string and parsing its name out that way via a regex.
+  if (type.hasOwnProperty('name')) {
+    return type.name;
+  }
+
+  const match = ('' + type).match(/^function\s*([^\s(]+)/);
+  return match === null ? '' : match[1];
 }
 
 /**

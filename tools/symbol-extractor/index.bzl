@@ -1,4 +1,4 @@
-# Copyright Google Inc. All Rights Reserved.
+# Copyright Google LLC All Rights Reserved.
 #
 # Use of this source code is governed by an MIT-style license that can be
 # found in the LICENSE file at https://angular.io/license
@@ -24,8 +24,9 @@ def js_expected_symbol_test(name, src, golden, data = [], **kwargs):
         name = name,
         data = all_data,
         entry_point = entry_point,
-        templated_args = ["$(location %s)" % src, "$(location %s)" % golden],
-        configuration_env_vars = ["compile"],
+        tags = kwargs.pop("tags", []) + ["symbol_extractor"],
+        templated_args = ["$(rootpath %s)" % src, "$(rootpath %s)" % golden],
+        configuration_env_vars = ["angular_ivy_enabled"],
         **kwargs
     )
 
@@ -34,7 +35,7 @@ def js_expected_symbol_test(name, src, golden, data = [], **kwargs):
         testonly = True,
         data = all_data,
         entry_point = entry_point,
-        configuration_env_vars = ["compile"],
-        templated_args = ["$(location %s)" % src, "$(location %s)" % golden, "--accept"],
+        configuration_env_vars = ["angular_ivy_enabled"],
+        templated_args = ["$(rootpath %s)" % src, "$(rootpath %s)" % golden, "--accept"],
         **kwargs
     )

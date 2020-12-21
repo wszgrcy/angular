@@ -25,11 +25,9 @@ contextual possibilities and hints as you type.
 This example shows autocomplete in an interpolation. As you type it out,
 you can hit tab to complete.
 
-<figure class="lightbox">
-  <div class="card">
-    <img src="generated/images/guide/language-service/language-completion.gif" alt="autocompletion">
-  </div>
-</figure>
+<div class="lightbox">
+  <img src="generated/images/guide/language-service/language-completion.gif" alt="autocompletion">
+</div>
 
 There are also completions within elements. Any elements you have as a component selector will
 show up in the completion list.
@@ -39,22 +37,18 @@ show up in the completion list.
 The Angular Language Service can forewarn you of mistakes in your code.
 In this example, Angular doesn't know what `orders` is or where it comes from.
 
-<figure class="lightbox">
-  <div class="card">
-    <img src="generated/images/guide/language-service/language-error.gif" alt="error checking">
-  </div>
-</figure>
+<div class="lightbox">
+  <img src="generated/images/guide/language-service/language-error.gif" alt="error checking">
+</div>
 
 ### Quick info and navigation
 
 The quick-info feature allows you to hover to see where components, directives, modules, and so on come from.
 You can then click "Go to definition" or press F12 to go directly to the definition.
 
-<figure class="lightbox">
-  <div class="card">
-    <img src="generated/images/guide/language-service/language-navigation.gif" alt="navigation">
-  </div>
-</figure>
+<div class="lightbox">
+  <img src="generated/images/guide/language-service/language-navigation.gif" alt="navigation">
+</div>
 
 
 ## Angular Language Service in your editor
@@ -70,36 +64,9 @@ In the marketplace, search for Angular Language Service extension, and click the
 
 ### WebStorm
 
-In [WebStorm](https://www.jetbrains.com/webstorm/), you must install the language service package as a project dependency.
+In [WebStorm](https://www.jetbrains.com/webstorm/), enable the plugin [Angular and AngularJS](https://plugins.jetbrains.com/plugin/6971-angular-and-angularjs).
 
-1. Add the following to your `devDependencies` in your project's `package.json`
-
-<code-example language="json" header="package.json">
-devDependencies {
-  "@angular/language-service": "^6.0.0"
-}
-</code-example>
-
-2. In the terminal window at the root of your project, install the `devDependencies` with `npm` or `yarn`:
-
-```sh
-npm install
-```
-*OR*
-
-```sh
-yarn
-```
-
-*OR*
-
-```sh
-yarn install
-```
-
-When Angular sees this dev dependency, it provides the language service in the WebStorm environment.
-WebStorm then gives you colorization inside the template and autocomplete in addition to the Angular Language Service.
-
+Since WebStorm 2019.1, the `@angular/language-service` is not required anymore and should be removed from your `package.json`.
 
 ### Sublime Text
 

@@ -1,18 +1,18 @@
 /**
  * @license
- * Copyright Google Inc. All Rights Reserved.
+ * Copyright Google LLC All Rights Reserved.
  *
  * Use of this source code is governed by an MIT-style license that can be
  * found in the LICENSE file at https://angular.io/license
  */
 
 import {NgForOf as NgForOfDef, NgIf as NgIfDef, NgTemplateOutlet as NgTemplateOutletDef} from '@angular/common';
-import {IterableDiffers, TemplateRef, ViewContainerRef} from '@angular/core';
+import {IterableDiffers, NgIterable, TemplateRef, ViewContainerRef} from '@angular/core';
 
-import {DirectiveType, ɵɵNgOnChangesFeature, ɵɵdefineDirective, ɵɵdirectiveInject} from '../../src/render3/index';
+import {DirectiveType, ɵɵdefineDirective, ɵɵdirectiveInject, ɵɵNgOnChangesFeature} from '../../src/render3/index';
 
-export const NgForOf: DirectiveType<NgForOfDef<any>> = NgForOfDef as any;
-export const NgIf: DirectiveType<NgIfDef> = NgIfDef as any;
+export const NgForOf: DirectiveType<NgForOfDef<any, NgIterable<any>>> = NgForOfDef as any;
+export const NgIf: DirectiveType<NgIfDef<any>> = NgIfDef as any;
 export const NgTemplateOutlet: DirectiveType<NgTemplateOutletDef> = NgTemplateOutletDef as any;
 
 NgForOf.ɵdir = ɵɵdefineDirective({
@@ -41,9 +41,8 @@ NgIf.ɵfac = () =>
 NgTemplateOutlet.ɵdir = ɵɵdefineDirective({
   type: NgTemplateOutletDef,
   selectors: [['', 'ngTemplateOutlet', '']],
-  features: [ɵɵNgOnChangesFeature()],
-  inputs:
-      {ngTemplateOutlet: 'ngTemplateOutlet', ngTemplateOutletContext: 'ngTemplateOutletContext'}
+  features: [ɵɵNgOnChangesFeature],
+  inputs: {ngTemplateOutlet: 'ngTemplateOutlet', ngTemplateOutletContext: 'ngTemplateOutletContext'}
 });
 
 NgTemplateOutlet.ɵfac = () => new NgTemplateOutletDef(ɵɵdirectiveInject(ViewContainerRef as any));

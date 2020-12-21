@@ -17,7 +17,7 @@ An NgModule is defined by a class decorated with `@NgModule()`. The `@NgModule()
 
 * `imports`: Other modules whose exported classes are needed by component templates declared in *this* NgModule.
 
-* `providers`: Creators of [services](guide/architecture-services) that this NgModule contributes to the global collection of services; they become accessible in all parts of the app. (You can also specify providers at the component level, which is often preferred.)
+* `providers`: Creators of [services](guide/architecture-services) that this NgModule contributes to the global collection of services; they become accessible in all parts of the app. (You can also specify providers at the component level.)
 
 * `bootstrap`: The main application view, called the *root component*, which hosts all other app views. Only the *root NgModule* should set the `bootstrap` property.
 
@@ -35,21 +35,17 @@ Here's a simple root NgModule definition.
 
 NgModules provide a *compilation context* for their components. A root NgModule always has a root component that is created during bootstrap, but any NgModule can include any number of additional components, which can be loaded through the router or created through the template. The components that belong to an NgModule share a compilation context.
 
-<figure class="lightbox">
-  <div class="card">
-    <img src="generated/images/guide/architecture/compilation-context.png" alt="Component compilation context" class="left">
-  </div>
-</figure>
+<div class="lightbox">
+  <img src="generated/images/guide/architecture/compilation-context.png" alt="Component compilation context" class="left">
+</div>
 
 <br class="clear">
 
 A component and its template together define a *view*. A component can contain a *view hierarchy*, which allows you to define arbitrarily complex areas of the screen that can be created, modified, and destroyed as a unit. A view hierarchy can mix views defined in components that belong to different NgModules. This is often the case, especially for UI libraries.
 
-<figure class="lightbox">
-  <div class="card">
-    <img src="generated/images/guide/architecture/view-hierarchy.png" alt="View hierarchy" class="left">
-  </div>
-</figure>
+<div class="lightbox">
+  <img src="generated/images/guide/architecture/view-hierarchy.png" alt="View hierarchy" class="left">
+</div>
 
 <br class="clear">
 
@@ -74,7 +70,7 @@ Other JavaScript modules use *import statements* to access public objects from o
 <code-example path="architecture/src/app/app.module.ts" region="export"></code-example>
 
 <div class="alert is-helpful">
-  <a href="http://exploringjs.com/es6/ch_modules.html">Learn more about the JavaScript module system on the web.</a>
+  <a href="https://exploringjs.com/es6/ch_modules.html">Learn more about the JavaScript module system on the web.</a>
 </div>
 
 ## Angular libraries

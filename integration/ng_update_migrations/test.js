@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright Google Inc. All Rights Reserved.
+ * Copyright Google LLC All Rights Reserved.
  *
  * Use of this source code is governed by an MIT-style license that can be
  * found in the LICENSE file at https://angular.io/license
@@ -18,12 +18,12 @@ const cliBinPath = path.join(projectDir, 'node_modules/@angular/cli/bin/ng');
 
 const expectationFiles = glob.sync('**/*_expected.ts', {cwd: projectDir});
 
-const fromVersion = '8.0.0';
-const toVersion = '9.0.0';
+const fromVersion = '9.0.0';
+const toVersion = '10.0.0';
 // Note that we need to specify "--allow-dirty" as the repository will become dirty
 // if dependencies for the integration test are installed (i.e. modified lock files)
 const updateCommandArgs = ['@angular/core', '--migrate-only', '--from', fromVersion,
-    '--to', toVersion, '--allow-dirty', '--skip-commits'];
+    '--to', toVersion, '--allow-dirty'];
 
 // Print out the command that is used to run the migrations for easier debugging.
 console.error(`Running "ng update ${updateCommandArgs.join(' ')}":`);

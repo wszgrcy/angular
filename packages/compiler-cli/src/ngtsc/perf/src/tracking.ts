@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright Google Inc. All Rights Reserved.
+ * Copyright Google LLC All Rights Reserved.
  *
  * Use of this source code is governed by an MIT-style license that can be
  * found in the LICENSE file at https://angular.io/license
@@ -9,6 +9,7 @@
 import * as fs from 'fs';
 import * as ts from 'typescript';
 import {resolve} from '../../file_system';
+import {DeclarationNode} from '../../reflection';
 import {PerfRecorder} from './api';
 import {HrTime, mark, timeSinceInMicros} from './clock';
 
@@ -20,16 +21,16 @@ export class PerfTracker implements PerfRecorder {
 
   private constructor(private zeroTime: HrTime) {}
 
-  static zeroedToNow(): PerfTracker { return new PerfTracker(mark()); }
+  static zeroedToNow(): PerfTracker {
+    return new PerfTracker(mark());
+  }
 
-  mark(name: string, node?: ts.SourceFile|ts.Declaration, category?: string, detail?: string):
-      void {
+  mark(name: string, node?: DeclarationNode, category?: string, detail?: string): void {
     const msg = this.makeLogMessage(PerfLogEventType.MARK, name, node, category, detail, undefined);
     this.log.push(msg);
   }
 
-  start(name: string, node?: ts.SourceFile|ts.Declaration, category?: string, detail?: string):
-      number {
+  start(name: string, node?: DeclarationNode, category?: string, detail?: string): number {
     const span = this.nextSpanId++;
     const msg = this.makeLogMessage(PerfLogEventType.SPAN_OPEN, name, node, category, detail, span);
     this.log.push(msg);
@@ -45,7 +46,7 @@ export class PerfTracker implements PerfRecorder {
   }
 
   private makeLogMessage(
-      type: PerfLogEventType, name: string, node: ts.SourceFile|ts.Declaration|undefined,
+      type: PerfLogEventType, name: string, node: DeclarationNode|undefined,
       category: string|undefined, detail: string|undefined, span: number|undefined): PerfLogEvent {
     const msg: PerfLogEvent = {
       type,
@@ -73,7 +74,9 @@ export class PerfTracker implements PerfRecorder {
     return msg;
   }
 
-  asJson(): unknown { return this.log; }
+  asJson(): unknown {
+    return this.log;
+  }
 
   serializeToFile(target: string, host: ts.CompilerHost): void {
     const json = JSON.stringify(this.log, null, 2);

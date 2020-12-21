@@ -8,8 +8,8 @@ import { Component } from '@angular/core';
 export class AppComponent {
   actionName = 'Go for it';
   isSpecial = true;
-  itemClearance = true;
-  resetClasses = 'new-class';
   canSave = true;
-
+  classExpression = 'special clearance';
+  styleExpression = 'color: red';
+  color = 'blue';
 }

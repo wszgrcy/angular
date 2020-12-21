@@ -1,12 +1,12 @@
 /**
  * @license
- * Copyright Google Inc. All Rights Reserved.
+ * Copyright Google LLC All Rights Reserved.
  *
  * Use of this source code is governed by an MIT-style license that can be
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {R3InjectableMetadataFacade, getCompilerFacade} from '../../compiler/compiler_facade';
+import {getCompilerFacade, R3InjectableMetadataFacade} from '../../compiler/compiler_facade';
 import {Type} from '../../interface/type';
 import {NG_FACTORY_DEF} from '../../render3/fields';
 import {getClosureSafeProperty} from '../../util/property';
@@ -55,7 +55,7 @@ export function compileInjectable(type: Type<any>, srcMeta?: Injectable): void {
             typeArgumentCount: metadata.typeArgumentCount,
             deps: reflectDependencies(type),
             injectFn: 'inject',
-            target: compiler.R3FactoryTarget.Pipe
+            target: compiler.R3FactoryTarget.Injectable
           });
         }
         return ngFactoryDef;
@@ -66,7 +66,7 @@ export function compileInjectable(type: Type<any>, srcMeta?: Injectable): void {
   }
 }
 
-type UseClassProvider = Injectable & ClassSansProvider & {deps?: any[]};
+type UseClassProvider = Injectable&ClassSansProvider&{deps?: any[]};
 
 const USE_VALUE =
     getClosureSafeProperty<ValueProvider>({provide: String, useValue: getClosureSafeProperty});

@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright Google Inc. All Rights Reserved.
+ * Copyright Google LLC All Rights Reserved.
  *
  * Use of this source code is governed by an MIT-style license that can be
  * found in the LICENSE file at https://angular.io/license
@@ -14,7 +14,7 @@ import {HtmlParser, ParseTreeResult} from '../../../src/ml_parser/html_parser';
 import {WhitespaceVisitor} from '../../../src/ml_parser/html_whitespaces';
 import {DEFAULT_INTERPOLATION_CONFIG, InterpolationConfig} from '../../../src/ml_parser/interpolation_config';
 import * as a from '../../../src/render3/r3_ast';
-import {Render3ParseResult, htmlAstToRender3Ast} from '../../../src/render3/r3_template_transform';
+import {htmlAstToRender3Ast, Render3ParseResult} from '../../../src/render3/r3_template_transform';
 import {I18nMetaVisitor} from '../../../src/render3/view/i18n/meta';
 import {BindingParser} from '../../../src/template_parser/binding_parser';
 import {MockSchemaRegistry} from '../../../testing';
@@ -78,11 +78,13 @@ export function toStringExpression(expr: e.AST): string {
 
 // Parse an html string to IVY specific info
 export function parseR3(
-    input: string, options: {preserveWhitespaces?: boolean} = {}): Render3ParseResult {
+    input: string, options: {preserveWhitespaces?: boolean, leadingTriviaChars?: string[]} = {}):
+    Render3ParseResult {
   const htmlParser = new HtmlParser();
 
-  const parseResult =
-      htmlParser.parse(input, 'path:://to/template', {tokenizeExpansionForms: true});
+  const parseResult = htmlParser.parse(
+      input, 'path:://to/template',
+      {tokenizeExpansionForms: true, leadingTriviaChars: options.leadingTriviaChars});
 
   if (parseResult.errors.length > 0) {
     const msg = parseResult.errors.map(e => e.toString()).join('\n');
@@ -101,7 +103,14 @@ export function parseR3(
       ['onEvent'], ['onEvent']);
   const bindingParser =
       new BindingParser(expressionParser, DEFAULT_INTERPOLATION_CONFIG, schemaRegistry, null, []);
-  return htmlAstToRender3Ast(htmlNodes, bindingParser);
+  const r3Result = htmlAstToRender3Ast(htmlNodes, bindingParser);
+
+  if (r3Result.errors.length > 0) {
+    const msg = r3Result.errors.map(e => e.toString()).join('\n');
+    throw new Error(msg);
+  }
+
+  return r3Result;
 }
 
 export function processI18nMeta(

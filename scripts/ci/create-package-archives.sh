@@ -2,11 +2,11 @@
 
 set -eu -o pipefail
 
-readonly prNumber="$1"
-readonly prLastSha="${2:0:7}"
+readonly safeBranchName="$(echo $1 | sed 's/^pull\//pr/' | sed 's/[^A-Za-z0-9_.-]/_/g')"
+readonly shortLastSha="$(git rev-parse --short $2)"
 readonly inputDir="$PROJECT_ROOT/$3"
 readonly outputDir="$PROJECT_ROOT/$4"
-readonly fileSuffix="-pr$prNumber-$prLastSha.tgz"
+readonly fileSuffix="-$safeBranchName-$shortLastSha.tgz"
 
 echo "Creating compressed archives for packages in '$inputDir'."
 
@@ -15,11 +15,14 @@ echo "  Preparing output directory: $outputDir"
 rm -rf "$outputDir"
 mkdir -p "$outputDir"
 
-# Create a compressed archive containing all packages.
-# (This is useful for copying all packages into `node_modules/` (without changing `package.json`).)
-outputFileName=all$fileSuffix
-echo "  Creating archive with all packages --> '$outputFileName'..."
-tar --create --gzip --directory "$inputDir" --file "$outputDir/$outputFileName" --transform s/^\./packages/ .
+# If there are more than one packages in `$inputDir`...
+if [[ $(ls -1 "$inputDir" | wc -l) -gt 1 ]]; then
+  # Create a compressed archive containing all packages.
+  # (This is useful for copying all packages into `node_modules/` (without changing `package.json`).)
+  outputFileName=all$fileSuffix
+  echo "  Creating archive with all packages --> '$outputFileName'..."
+  tar --create --gzip --directory "$inputDir" --file "$outputDir/$outputFileName" --transform s/^\./packages/ .
+fi
 
 # Create a compressed archive for each package.
 # (This is useful for referencing the path/URL to the resulting archive in `package.json`.)

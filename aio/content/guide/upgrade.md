@@ -80,7 +80,7 @@ doesn't work that well if you have to load all those files to the HTML page with
 order. That's why it's a good idea to start using a *module loader*.
 
 Using a module loader such as [SystemJS](https://github.com/systemjs/systemjs),
-[Webpack](http://webpack.github.io/), or [Browserify](http://browserify.org/)
+[Webpack](https://webpack.github.io/), or [Browserify](http://browserify.org/)
 allows us to use the built-in module systems of TypeScript or ES2015.
 You can use the `import` and `export` features that explicitly specify what code can
 and will be shared between different parts of the application. For ES5 applications
@@ -266,11 +266,9 @@ everything work seamlessly:
   When you register a downgraded service, you must explicitly specify a *string token* that you want to
   use in AngularJS.
 
-<figure class="lightbox">
-  <div class="card">
-    <img src="generated/images/guide/upgrade/injectors.png" alt="The two injectors in a hybrid application">
-  </div>
-</figure>
+<div class="lightbox">
+  <img src="generated/images/guide/upgrade/injectors.png" alt="The two injectors in a hybrid application">
+</div>
 
 #### Components and the DOM
 
@@ -304,11 +302,9 @@ ways:
     bridges the related concepts of AngularJS transclusion and Angular content
     projection together.
 
-<figure class="lightbox">
-  <div class="card">
-    <img src="generated/images/guide/upgrade/dom.png" alt="DOM element ownership in a hybrid application">
-  </div>
-</figure>
+<div class="lightbox">
+  <img src="generated/images/guide/upgrade/dom.png" alt="DOM element ownership in a hybrid application">
+</div>
 
 Whenever you use a component that belongs to the other framework, a
 switch between framework boundaries occurs. However, that switch only
@@ -351,11 +347,9 @@ AngularJS and Angular approaches. Here's what happens:
   every turn of the Angular zone. This also triggers AngularJS change
   detection after every event.
 
-<figure class="lightbox">
-  <div class="card">
-    <img src="generated/images/guide/upgrade/change_detection.png" alt="Change detection in a hybrid application">
-  </div>
-</figure>
+<div class="lightbox">
+  <img src="generated/images/guide/upgrade/change_detection.png" alt="Change detection in a hybrid application">
+</div>
 
 In practice, you do not need to call `$apply()`,
 regardless of whether it is in AngularJS or Angular. The
@@ -485,6 +479,15 @@ using the `downgradeComponent()` method. The result is an AngularJS
 <code-example path="upgrade-module/src/app/downgrade-static/app.module.ts" region="downgradecomponent" header="app.module.ts">
 </code-example>
 
+<div class="alert is-helpful">
+
+By default, Angular change detection will also run on the component for every
+AngularJS `$digest` cycle. If you wish to only have change detection run when
+the inputs change, you can set `propagateDigest` to `false` when calling
+`downgradeComponent()`.
+
+</div>
+
 Because `HeroDetailComponent` is an Angular component, you must also add it to the
 `declarations` in the `AppModule`.
 
@@ -545,12 +548,14 @@ of multiple words. In Angular, you would bind these attributes using camelCase:
 
 <code-example format="">
   [myHero]="hero"
+  (heroDeleted)="handleHeroDeleted($event)"
 </code-example>
 
 But when using them from AngularJS templates, you must use kebab-case:
 
 <code-example format="">
   [my-hero]="hero"
+  (hero-deleted)="handleHeroDeleted($event)"
 </code-example>
 
 </div>
@@ -938,7 +943,7 @@ The `useHash` property defaults to `false`, and the `hashPrefix` defaults to an 
 
 ```ts
 LocationUpgradeModule.config({
-  useHash: true
+  useHash: true,
   hashPrefix: '!'
 })
 ```
@@ -964,6 +969,12 @@ angular.module('myHybridApp', [...])
 
 Once you introduce the Angular Router, using the Angular Router triggers navigations through the unified location service, still providing a single source for navigating with AngularJS and Angular.
 
+<!--
+TODO:
+Correctly document how to use AOT with SystemJS-based `ngUpgrade` apps (or better yet update the
+`ngUpgrade` examples/guides to use `@angular/cli`).
+See https://github.com/angular/angular/issues/35989.
+
 ## Using Ahead-of-time compilation with hybrid apps
 
 You can take advantage of Ahead-of-time (AOT) compilation on hybrid apps just like on any other
@@ -983,6 +994,7 @@ bootstrap the hybrid app:
 </code-example>
 
 And that's all you need do to get the full benefit of AOT for Angular apps!
+-->
 
 ## PhoneCat Upgrade Tutorial
 
@@ -1168,11 +1180,19 @@ Begin by installing TypeScript to the project.
 </code-example>
 
 Install type definitions for the existing libraries that
-you're using but that don't come with prepackaged types: AngularJS and the
+you're using but that don't come with prepackaged types: AngularJS, AngularJS Material, and the
 Jasmine unit test framework.
 
+For the PhoneCat app, we can install the necessary type definitions by running the following command:
+
 <code-example format="">
-  npm install @types/jasmine @types/angular @types/angular-animate @types/angular-cookies @types/angular-mocks @types/angular-resource @types/angular-route @types/angular-sanitize --save-dev
+  npm install @types/jasmine @types/angular @types/angular-animate @types/angular-aria @types/angular-cookies @types/angular-mocks @types/angular-resource @types/angular-route @types/angular-sanitize --save-dev
+</code-example>
+
+If you are using AngularJS Material, you can install the type definitions via:
+
+<code-example format="">
+  npm install @types/angular-material --save-dev
 </code-example>
 
 You should also configure the TypeScript compiler with a `tsconfig.json` in the project directory
@@ -1360,7 +1380,7 @@ You also need to make a couple of adjustments
 to the `systemjs.config.js` file installed during [upgrade setup](guide/upgrade-setup).
 
 Point the browser to the project root when loading things through SystemJS,
-instead of using the  `<base>` URL.
+instead of using the `<base>` URL.
 
 Install the `upgrade` package via `npm install @angular/upgrade --save`
 and add a mapping for the `@angular/upgrade/static` package.
@@ -1556,7 +1576,7 @@ with Angular's two-way `[(ngModel)]` binding syntax:
 <code-example path="upgrade-phonecat-2-hybrid/app/phone-list/phone-list.template.html" region="controls" header="app/phone-list/phone-list.template.html (search controls)"></code-example>
 
 Replace the list's `ng-repeat` with an `*ngFor` as
-[described in the Template Syntax page](guide/template-syntax#directives).
+[described in the Template Syntax page](guide/built-in-directives).
 Replace the image tag's `ng-src` with a binding to the native `src` property.
 
 <code-example path="upgrade-phonecat-2-hybrid/app/phone-list/phone-list.template.html" region="list" header="app/phone-list/phone-list.template.html (phones)"></code-example>
@@ -1626,7 +1646,7 @@ There are several notable changes here:
   bindings for the standard `src` property.
 
 * You're using the property binding syntax around `ng-class`. Though Angular
-  does have [a very similar `ngClass`](guide/template-syntax#directives)
+  does have [a very similar `ngClass`](guide/built-in-directives)
   as AngularJS does, its value is not magically evaluated as an expression.
   In Angular, you always specify in the template when an attribute's value is
   a property expression, as opposed to a literal string.

@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright Google Inc. All Rights Reserved.
+ * Copyright Google LLC All Rights Reserved.
  *
  * Use of this source code is governed by an MIT-style license that can be
  * found in the LICENSE file at https://angular.io/license
@@ -43,6 +43,7 @@ export interface MigrationHost {
    * given class.
    * @param clazz the class to receive the new decorator.
    * @param decorator the decorator to inject.
+   * @param flags optional bitwise flag to influence the compilation of the decorator.
    */
   injectSyntheticDecorator(clazz: ClassDeclaration, decorator: Decorator, flags?: HandlerFlags):
       void;

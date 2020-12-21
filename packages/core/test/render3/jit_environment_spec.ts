@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright Google Inc. All Rights Reserved.
+ * Copyright Google LLC All Rights Reserved.
  *
  * Use of this source code is governed by an MIT-style license that can be
  * found in the LICENSE file at https://angular.io/license
@@ -18,6 +18,18 @@ const INTERFACE_EXCEPTIONS = new Set<string>([
   'ɵɵNgModuleDefWithMeta',
   'ɵɵPipeDefWithMeta',
   'ɵɵFactoryDef',
+  'ModuleWithProviders',
+]);
+
+/**
+ * The following symbols are only referenced from partial declaration compilation outputs, which
+ * will never be emitted by the JIT compiler so are allowed to be omitted from the JIT environment.
+ */
+const PARTIAL_ONLY = new Set<string>([
+  'ɵɵngDeclareDirective',
+  'ɵɵngDeclareComponent',
+  'ChangeDetectionStrategy',
+  'ViewEncapsulation',
 ]);
 
 describe('r3 jit environment', () => {
@@ -28,11 +40,11 @@ describe('r3 jit environment', () => {
     Object
         // Map over the static properties of Identifiers.
         .keys(Identifiers)
-        .map(key => (Identifiers as any as{[key: string]: string | ExternalReference})[key])
+        .map(key => (Identifiers as any as {[key: string]: string | ExternalReference})[key])
         // A few such properties are string constants. Ignore them, and focus on ExternalReferences.
         .filter(isExternalReference)
         // Some references are to interface types. Only take properties which have runtime values.
-        .filter(sym => !INTERFACE_EXCEPTIONS.has(sym.name))
+        .filter(sym => !INTERFACE_EXCEPTIONS.has(sym.name) && !PARTIAL_ONLY.has(sym.name))
         .forEach(sym => {
           // Assert that angularCoreEnv has a reference to the runtime symbol.
           expect(angularCoreEnv.hasOwnProperty(sym.name))
@@ -41,7 +53,7 @@ describe('r3 jit environment', () => {
   });
 });
 
-function isExternalReference(sym: ExternalReference | string): sym is ExternalReference&
+function isExternalReference(sym: ExternalReference|string): sym is ExternalReference&
     {name: string} {
   return typeof sym === 'object' && sym.name !== null && sym.moduleName !== null;
 }

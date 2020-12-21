@@ -1,23 +1,21 @@
 /**
  * @license
- * Copyright Google Inc. All Rights Reserved.
+ * Copyright Google LLC All Rights Reserved.
  *
  * Use of this source code is governed by an MIT-style license that can be
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {Component, TemplateRef, ViewChild, ViewContainerRef} from '@angular/core';
+import {Component, ComponentFactoryResolver, Injector, NgModule, TemplateRef, ViewChild, ViewContainerRef} from '@angular/core';
 import {TestBed} from '@angular/core/testing';
 import {expect} from '@angular/platform-browser/testing/src/matchers';
 import {ivyEnabled, onlyInIvy} from '@angular/private/testing';
 
 describe('TemplateRef', () => {
   describe('rootNodes', () => {
-
     @Component({template: `<ng-template #templateRef></ng-template>`})
     class App {
-      @ViewChild('templateRef', {static: true})
-      templateRef !: TemplateRef<any>;
+      @ViewChild('templateRef', {static: true}) templateRef!: TemplateRef<any>;
       minutes = 0;
     }
 
@@ -55,7 +53,7 @@ describe('TemplateRef', () => {
           expect(rootNodes.length).toBe(0);
         });
 
-    it('should include projected nodes', () => {
+    it('should include projected nodes and their children', () => {
       @Component({
         selector: 'menu-content',
         template: `
@@ -75,11 +73,12 @@ describe('TemplateRef', () => {
               <menu-content #menu="menuContent">
                 <button>Item one</button>
                 <button>Item two</button>
+                <ng-template [ngIf]="true"><button>Item three</button></ng-template>
               </menu-content>
             `
       })
       class App {
-        @ViewChild(MenuContent) content !: MenuContent;
+        @ViewChild(MenuContent) content!: MenuContent;
 
         constructor(public viewContainerRef: ViewContainerRef) {}
       }
@@ -90,10 +89,11 @@ describe('TemplateRef', () => {
 
       const instance = fixture.componentInstance;
       const viewRef = instance.viewContainerRef.createEmbeddedView(instance.content.template);
-      const rootNodeTextContent = viewRef.rootNodes.map(node => node && node.textContent.trim())
-                                      .filter(text => text !== '');
+      const rootNodeTextContent =
+          viewRef.rootNodes.map(node => node && node.textContent.trim())
+              .filter(text => text !== '' && text.indexOf('ng-reflect-ng-if') === -1);
 
-      expect(rootNodeTextContent).toEqual(['Header', 'Item one', 'Item two']);
+      expect(rootNodeTextContent).toEqual(['Header', 'Item one', 'Item two', 'Item three']);
     });
 
     it('should descend into view containers on ng-template', () => {
@@ -179,6 +179,98 @@ describe('TemplateRef', () => {
         // when it comes to ICU containers - this needs more investigation / fix.
         expect(rootNodes.length).toBe(7);
       }
+    });
+
+    it('should return an empty array for an embedded view with projection and no projectable nodes',
+       () => {
+         const rootNodes =
+             getRootNodes(`<ng-template #templateRef><ng-content></ng-content></ng-template>`);
+         // VE will, incorrectly, return an additional comment node in this case
+         expect(rootNodes.length).toBe(ivyEnabled ? 0 : 1);
+       });
+
+    it('should return an empty array for an embedded view with multiple projections and no projectable nodes',
+       () => {
+         const rootNodes = getRootNodes(
+             `<ng-template #templateRef><ng-content></ng-content><ng-content select="foo"></ng-content></ng-template>`);
+         // VE will, incorrectly, return an additional comment node in this case
+         expect(rootNodes.length).toBe(ivyEnabled ? 0 : 1);
+       });
+
+    describe('projectable nodes provided to a dynamically created component', () => {
+      @Component({selector: 'dynamic', template: ''})
+      class DynamicCmp {
+        @ViewChild('templateRef', {static: true}) templateRef!: TemplateRef<any>;
+      }
+
+      @NgModule({
+        declarations: [DynamicCmp],
+        entryComponents: [DynamicCmp],
+      })
+      class WithDynamicCmpModule {
+      }
+
+      @Component({selector: 'test', template: ''})
+      class TestCmp {
+        constructor(public cfr: ComponentFactoryResolver) {}
+      }
+
+      beforeEach(() => {
+        TestBed.configureTestingModule({
+          declarations: [TestCmp],
+          imports: [WithDynamicCmpModule],
+        });
+      });
+
+      it('should return projectable nodes when provided', () => {
+        TestBed.overrideTemplate(
+            DynamicCmp, `<ng-template #templateRef><ng-content></ng-content></ng-template>`);
+
+        const fixture = TestBed.createComponent(TestCmp);
+        const dynamicCmptFactory =
+            fixture.componentInstance.cfr.resolveComponentFactory(DynamicCmp);
+
+        // Number of projectable nodes matches the number of slots - all nodes should be returned
+        const projectableNodes = [[document.createTextNode('textNode')]];
+        const cmptRef = dynamicCmptFactory.create(Injector.NULL, projectableNodes);
+        const viewRef = cmptRef.instance.templateRef.createEmbeddedView({});
+
+        // VE will, incorrectly, return an additional comment node in this case
+        expect(viewRef.rootNodes.length).toBe(ivyEnabled ? 1 : 2);
+      });
+
+      it('should return an empty collection when no projectable nodes were provided', () => {
+        TestBed.overrideTemplate(
+            DynamicCmp, `<ng-template #templateRef><ng-content></ng-content></ng-template>`);
+
+        const fixture = TestBed.createComponent(TestCmp);
+        const dynamicCmptFactory =
+            fixture.componentInstance.cfr.resolveComponentFactory(DynamicCmp);
+
+        // There are slots but projectable nodes were not provided - nothing should be returned
+        const cmptRef = dynamicCmptFactory.create(Injector.NULL, []);
+        const viewRef = cmptRef.instance.templateRef.createEmbeddedView({});
+
+        // VE will, incorrectly, return an additional comment node in this case
+        expect(viewRef.rootNodes.length).toBe(ivyEnabled ? 0 : 1);
+      });
+
+      it('should return an empty collection when projectable nodes were provided but there are no slots',
+         () => {
+           TestBed.overrideTemplate(DynamicCmp, `<ng-template #templateRef></ng-template>`);
+
+           const fixture = TestBed.createComponent(TestCmp);
+           const dynamicCmptFactory =
+               fixture.componentInstance.cfr.resolveComponentFactory(DynamicCmp);
+
+           // There are no slots but projectable were provided - nothing should be returned
+           const projectableNodes = [[document.createTextNode('textNode')]];
+           const cmptRef = dynamicCmptFactory.create(Injector.NULL, projectableNodes);
+           const viewRef = cmptRef.instance.templateRef.createEmbeddedView({});
+
+           // VE will, incorrectly, return an additional comment node in this case
+           expect(viewRef.rootNodes.length).toBe(ivyEnabled ? 0 : 1);
+         });
     });
   });
 });

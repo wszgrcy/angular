@@ -1,12 +1,12 @@
 /**
  * @license
- * Copyright Google Inc. All Rights Reserved.
+ * Copyright Google LLC All Rights Reserved.
  *
  * Use of this source code is governed by an MIT-style license that can be
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {LOCALE_ID} from '@angular/core';
+import {DEFAULT_CURRENCY_CODE, LOCALE_ID} from '@angular/core';
 import {ivyEnabled} from '@angular/private/testing';
 
 import {getLocaleId} from '../src/render3';
@@ -16,8 +16,14 @@ import {describe, expect, inject, it} from '../testing/src/testing_internal';
 
 {
   describe('Application module', () => {
-    it('should set the default locale to "en-US"',
-       inject([LOCALE_ID], (defaultLocale: string) => { expect(defaultLocale).toEqual('en-US'); }));
+    it('should set the default locale to "en-US"', inject([LOCALE_ID], (defaultLocale: string) => {
+         expect(defaultLocale).toEqual('en-US');
+       }));
+
+    it('should set the default currency code to "USD"',
+       inject([DEFAULT_CURRENCY_CODE], (defaultCurrencyCode: string) => {
+         expect(defaultCurrencyCode).toEqual('USD');
+       }));
 
     if (ivyEnabled) {
       it('should set the ivy locale with the configured LOCALE_ID', () => {

@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright Google Inc. All Rights Reserved.
+ * Copyright Google LLC All Rights Reserved.
  *
  * Use of this source code is governed by an MIT-style license that can be
  * found in the LICENSE file at https://angular.io/license
@@ -9,19 +9,19 @@
 import {APP_INITIALIZER, ApplicationInitStatus} from './application_init';
 import {ApplicationRef} from './application_ref';
 import {APP_ID_RANDOM_PROVIDER} from './application_tokens';
-import {IterableDiffers, KeyValueDiffers, defaultIterableDiffers, defaultKeyValueDiffers} from './change_detection/change_detection';
+import {defaultIterableDiffers, defaultKeyValueDiffers, IterableDiffers, KeyValueDiffers} from './change_detection/change_detection';
 import {Console} from './console';
 import {Injector, StaticProvider} from './di';
 import {Inject, Optional, SkipSelf} from './di/metadata';
 import {ErrorHandler} from './error_handler';
-import {DEFAULT_LOCALE_ID} from './i18n/localization';
-import {LOCALE_ID} from './i18n/tokens';
+import {DEFAULT_LOCALE_ID, USD_CURRENCY_CODE} from './i18n/localization';
+import {DEFAULT_CURRENCY_CODE, LOCALE_ID} from './i18n/tokens';
 import {ivyEnabled} from './ivy_switch';
 import {ComponentFactoryResolver} from './linker';
 import {Compiler} from './linker/compiler';
 import {NgModule} from './metadata';
 import {SCHEDULER} from './render3/component_ref';
-import {setLocaleId} from './render3/i18n';
+import {setLocaleId} from './render3/i18n/i18n_locale_id';
 import {NgZone} from './zone';
 
 declare const $localize: {locale?: string};
@@ -49,7 +49,8 @@ export function _localeFactory(locale?: string): string {
  * * Ivy enabled: use `$localize.locale`
  */
 export function getGlobalLocale(): string {
-  if (ngI18nClosureMode && typeof goog !== 'undefined' && goog.LOCALE !== 'en') {
+  if (typeof ngI18nClosureMode !== 'undefined' && ngI18nClosureMode &&
+      typeof goog !== 'undefined' && goog.LOCALE !== 'en') {
     // * The default `goog.LOCALE` value is `en`, while Angular used `en-US`.
     // * In order to preserve backwards compatibility, we use Angular default value over
     //   Closure Compiler's one.
@@ -77,8 +78,7 @@ export const APPLICATION_MODULE_PROVIDERS: StaticProvider[] = [
   {
     provide: ApplicationRef,
     useClass: ApplicationRef,
-    deps:
-        [NgZone, Console, Injector, ErrorHandler, ComponentFactoryResolver, ApplicationInitStatus]
+    deps: [NgZone, Console, Injector, ErrorHandler, ComponentFactoryResolver, ApplicationInitStatus]
   },
   {provide: SCHEDULER, deps: [NgZone], useFactory: zoneSchedulerFactory},
   {
@@ -95,6 +95,7 @@ export const APPLICATION_MODULE_PROVIDERS: StaticProvider[] = [
     useFactory: _localeFactory,
     deps: [[new Inject(LOCALE_ID), new Optional(), new SkipSelf()]]
   },
+  {provide: DEFAULT_CURRENCY_CODE, useValue: USD_CURRENCY_CODE},
 ];
 
 /**
@@ -110,10 +111,12 @@ export function zoneSchedulerFactory(ngZone: NgZone): (fn: () => void) => void {
   let queue: (() => void)[] = [];
   ngZone.onStable.subscribe(() => {
     while (queue.length) {
-      queue.pop() !();
+      queue.pop()!();
     }
   });
-  return function(fn: () => void) { queue.push(fn); };
+  return function(fn: () => void) {
+    queue.push(fn);
+  };
 }
 
 /**

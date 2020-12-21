@@ -1,11 +1,13 @@
 /**
  * @license
- * Copyright Google Inc. All Rights Reserved.
+ * Copyright Google LLC All Rights Reserved.
  *
  * Use of this source code is governed by an MIT-style license that can be
  * found in the LICENSE file at https://angular.io/license
  */
 import * as realFs from 'fs';
+import * as fsExtra from 'fs-extra';
+import * as os from 'os';
 import {absoluteFrom, dirname, relativeFrom, setFileSystem} from '../src/helpers';
 import {NodeJSFileSystem} from '../src/node_js_file_system';
 import {AbsoluteFsPath} from '../src/types';
@@ -43,20 +45,43 @@ describe('NodeJSFileSystem', () => {
     });
   });
 
+  describe('readFileBuffer()', () => {
+    it('should delegate to fs.readFileSync()', () => {
+      const buffer = new Buffer('Some contents');
+      const spy = spyOn(realFs, 'readFileSync').and.returnValue(buffer);
+      const result = fs.readFileBuffer(abcPath);
+      expect(result).toBe(buffer);
+      expect(spy).toHaveBeenCalledWith(abcPath);
+    });
+  });
+
   describe('writeFile()', () => {
     it('should delegate to fs.writeFileSync()', () => {
       const spy = spyOn(realFs, 'writeFileSync');
       fs.writeFile(abcPath, 'Some contents');
-      expect(spy).toHaveBeenCalledWith(abcPath, 'Some contents', 'utf8');
+      expect(spy).toHaveBeenCalledWith(abcPath, 'Some contents', undefined);
+      spy.calls.reset();
+      fs.writeFile(abcPath, 'Some contents', /* exclusive */ true);
+      expect(spy).toHaveBeenCalledWith(abcPath, 'Some contents', {flag: 'wx'});
+    });
+  });
+
+  describe('removeFile()', () => {
+    it('should delegate to fs.unlink()', () => {
+      const spy = spyOn(realFs, 'unlinkSync');
+      fs.removeFile(abcPath);
+      expect(spy).toHaveBeenCalledWith(abcPath);
     });
   });
 
   describe('readdir()', () => {
     it('should delegate to fs.readdirSync()', () => {
-      const spy = spyOn(realFs, 'readdirSync').and.returnValue(['x', 'y/z']);
+      const spy = spyOn(realFs, 'readdirSync').and.returnValue(['x', 'y/z'] as any);
       const result = fs.readdir(abcPath);
       expect(result).toEqual([relativeFrom('x'), relativeFrom('y/z')]);
-      expect(spy).toHaveBeenCalledWith(abcPath);
+      // TODO: @JiaLiPassion need to wait for @types/jasmine update to handle optional parameters.
+      // https://github.com/DefinitelyTyped/DefinitelyTyped/issues/43486
+      expect(spy as any).toHaveBeenCalledWith(abcPath);
     });
   });
 
@@ -76,7 +101,9 @@ describe('NodeJSFileSystem', () => {
       const spy = spyOn(realFs, 'statSync').and.returnValue(stats);
       const result = fs.stat(abcPath);
       expect(result).toBe(stats);
-      expect(spy).toHaveBeenCalledWith(abcPath);
+      // TODO: @JiaLiPassion need to wait for @types/jasmine update to handle optional parameters.
+      // https://github.com/DefinitelyTyped/DefinitelyTyped/issues/43486
+      expect(spy as any).toHaveBeenCalledWith(abcPath);
     });
   });
 
@@ -113,7 +140,7 @@ describe('NodeJSFileSystem', () => {
       const xyPath = absoluteFrom('/x/y');
       const mkdirCalls: string[] = [];
       const existsCalls: string[] = [];
-      spyOn(realFs, 'mkdirSync').and.callFake((path: string) => mkdirCalls.push(path));
+      spyOn(realFs, 'mkdirSync').and.callFake(((path: string) => mkdirCalls.push(path)) as any);
       spyOn(fs, 'exists').and.callFake((path: AbsoluteFsPath) => {
         existsCalls.push(path);
         switch (path) {
@@ -151,12 +178,14 @@ describe('NodeJSFileSystem', () => {
            }
            return false;
          });
-         spyOn(fs, 'stat').and.returnValue({isDirectory: () => true});
-         const mkdirSyncSpy = spyOn(realFs, 'mkdirSync').and.callFake((path: string) => {
-           if (path === abcPath) {
-             throw new Error('It exists already. Supposedly.');
-           }
-         });
+         spyOn(fs, 'stat').and.returnValue({isDirectory: () => true} as any);
+         const mkdirSyncSpy =
+             spyOn(realFs, 'mkdirSync').and.callFake(((path: string) => {
+                                                       if (path === abcPath) {
+                                                         throw new Error(
+                                                             'It exists already. Supposedly.');
+                                                       }
+                                                     }) as any);
 
          fs.ensureDir(abcPath);
          expect(mkdirSyncSpy).toHaveBeenCalledTimes(3);
@@ -166,11 +195,12 @@ describe('NodeJSFileSystem', () => {
 
     it('should fail if creating the directory throws and the directory does not exist', () => {
       spyOn(fs, 'exists').and.returnValue(false);
-      spyOn(realFs, 'mkdirSync').and.callFake((path: string) => {
-        if (path === abcPath) {
-          throw new Error('Unable to create directory (for whatever reason).');
-        }
-      });
+      spyOn(realFs, 'mkdirSync')
+          .and.callFake(((path: string) => {
+                          if (path === abcPath) {
+                            throw new Error('Unable to create directory (for whatever reason).');
+                          }
+                        }) as any);
 
       expect(() => fs.ensureDir(abcPath))
           .toThrowError('Unable to create directory (for whatever reason).');
@@ -190,15 +220,39 @@ describe('NodeJSFileSystem', () => {
         }
         return false;
       });
-      spyOn(fs, 'stat').and.returnValue({isDirectory: isDirectorySpy});
-      spyOn(realFs, 'mkdirSync').and.callFake((path: string) => {
-        if (path === abcPath) {
-          throw new Error('It exists already. Supposedly.');
-        }
-      });
+      spyOn(fs, 'stat').and.returnValue({isDirectory: isDirectorySpy} as any);
+      spyOn(realFs, 'mkdirSync').and.callFake(((path: string) => {
+                                                if (path === abcPath) {
+                                                  throw new Error('It exists already. Supposedly.');
+                                                }
+                                              }) as any);
 
       expect(() => fs.ensureDir(abcPath)).toThrowError('It exists already. Supposedly.');
       expect(isDirectorySpy).toHaveBeenCalledTimes(1);
     });
   });
+
+  describe('removeDeep()', () => {
+    it('should delegate to fsExtra.remove()', () => {
+      const spy = spyOn(fsExtra, 'removeSync');
+      fs.removeDeep(abcPath);
+      expect(spy).toHaveBeenCalledWith(abcPath);
+    });
+  });
+
+  describe('isCaseSensitive()', () => {
+    it('should return true if the FS is case-sensitive', () => {
+      const isCaseSensitive = !realFs.existsSync(__filename.toUpperCase());
+      expect(fs.isCaseSensitive()).toEqual(isCaseSensitive);
+    });
+  });
+
+  if (os.platform() === 'win32') {
+    // Only relevant on Windows
+    describe('relative', () => {
+      it('should handle Windows paths on different drives', () => {
+        expect(fs.relative('C:\\a\\b\\c', 'D:\\a\\b\\d')).toEqual(absoluteFrom('D:\\a\\b\\d'));
+      });
+    });
+  }
 });

@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright Google Inc. All Rights Reserved.
+ * Copyright Google LLC All Rights Reserved.
  *
  * Use of this source code is governed by an MIT-style license that can be
  * found in the LICENSE file at https://angular.io/license
@@ -9,13 +9,14 @@
 import {logging} from '@angular-devkit/core';
 import {Rule, SchematicContext, SchematicsException, Tree} from '@angular-devkit/schematics';
 import {AotCompiler} from '@angular/compiler';
+import {Diagnostic as NgDiagnostic} from '@angular/compiler-cli';
 import {PartialEvaluator} from '@angular/compiler-cli/src/ngtsc/partial_evaluator';
 import {TypeScriptReflectionHost} from '@angular/compiler-cli/src/ngtsc/reflection';
 import {relative} from 'path';
 import * as ts from 'typescript';
 
 import {getProjectTsConfigPaths} from '../../utils/project_tsconfig_paths';
-import {createMigrationCompilerHost} from '../../utils/typescript/compiler_host';
+import {canMigrateFile, createMigrationCompilerHost} from '../../utils/typescript/compiler_host';
 
 import {createNgcProgram} from './create_ngc_program';
 import {NgDeclarationCollector} from './ng_declaration_collector';
@@ -23,7 +24,7 @@ import {UndecoratedClassesTransform} from './transform';
 import {UpdateRecorder} from './update_recorder';
 
 const MIGRATION_RERUN_MESSAGE = 'Migration can be rerun with: "ng update @angular/core ' +
-    '--from 8.0.0 --to 9.0.0 --migrate-only"';
+    '--migrate-only migration-v9-undecorated-classes-with-di"';
 
 const MIGRATION_AOT_FAILURE = 'This migration uses the Angular compiler internally and ' +
     'therefore projects that no longer build successfully after the update cannot run ' +
@@ -81,13 +82,14 @@ function runUndecoratedClassesMigration(
 
   const {program, compiler} = programData;
   const typeChecker = program.getTypeChecker();
-  const partialEvaluator =
-      new PartialEvaluator(new TypeScriptReflectionHost(typeChecker), typeChecker);
+  const partialEvaluator = new PartialEvaluator(
+      new TypeScriptReflectionHost(typeChecker), typeChecker, /* dependencyTracker */ null);
   const declarationCollector = new NgDeclarationCollector(typeChecker, partialEvaluator);
-  const rootSourceFiles = program.getRootFileNames().map(f => program.getSourceFile(f) !);
+  const sourceFiles =
+      program.getSourceFiles().filter(sourceFile => canMigrateFile(basePath, sourceFile, program));
 
   // Analyze source files by detecting all directives, components and providers.
-  rootSourceFiles.forEach(sourceFile => declarationCollector.visitNode(sourceFile));
+  sourceFiles.forEach(sourceFile => declarationCollector.visitNode(sourceFile));
 
   const {decoratedDirectives, decoratedProviders, undecoratedDeclarations} = declarationCollector;
   const transform =
@@ -121,7 +123,7 @@ function runUndecoratedClassesMigration(
   /** Gets the update recorder for the specified source file. */
   function getUpdateRecorder(sourceFile: ts.SourceFile): UpdateRecorder {
     if (updateRecorders.has(sourceFile)) {
-      return updateRecorders.get(sourceFile) !;
+      return updateRecorders.get(sourceFile)!;
     }
     const treeRecorder = tree.beginUpdate(relative(basePath, sourceFile.fileName));
     const recorder: UpdateRecorder = {
@@ -144,11 +146,17 @@ function runUndecoratedClassesMigration(
         treeRecorder.remove(namedBindings.getStart(), namedBindings.getWidth());
         treeRecorder.insertRight(namedBindings.getStart(), newNamedBindings);
       },
-      commitUpdate() { tree.commitUpdate(treeRecorder); }
+      commitUpdate() {
+        tree.commitUpdate(treeRecorder);
+      }
     };
     updateRecorders.set(sourceFile, recorder);
     return recorder;
   }
+}
+
+function getErrorDiagnostics(diagnostics: ReadonlyArray<ts.Diagnostic|NgDiagnostic>) {
+  return <ts.Diagnostic[]>diagnostics.filter(d => d.category === ts.DiagnosticCategory.Error);
 }
 
 function gracefullyCreateProgram(
@@ -157,8 +165,18 @@ function gracefullyCreateProgram(
   try {
     const {ngcProgram, host, program, compiler} = createNgcProgram(
         (options) => createMigrationCompilerHost(tree, options, basePath), tsconfigPath);
-    const syntacticDiagnostics = ngcProgram.getTsSyntacticDiagnostics();
-    const structuralDiagnostics = ngcProgram.getNgStructuralDiagnostics();
+    const syntacticDiagnostics = getErrorDiagnostics(ngcProgram.getTsSyntacticDiagnostics());
+    const structuralDiagnostics = getErrorDiagnostics(ngcProgram.getNgStructuralDiagnostics());
+    const configDiagnostics = getErrorDiagnostics(
+        [...program.getOptionsDiagnostics(), ...ngcProgram.getNgOptionDiagnostics()]);
+
+    if (configDiagnostics.length) {
+      logger.warn(
+          `\nTypeScript project "${tsconfigPath}" has configuration errors. This could cause ` +
+          `an incomplete migration. Please fix the following failures and rerun the migration:`);
+      logger.error(ts.formatDiagnostics(configDiagnostics, host));
+      return null;
+    }
 
     // Syntactic TypeScript errors can throw off the query analysis and therefore we want
     // to notify the developer that we couldn't analyze parts of the project. Developers
@@ -177,7 +195,7 @@ function gracefullyCreateProgram(
 
     return {program, compiler};
   } catch (e) {
-    logger.warn(`\n${MIGRATION_AOT_FAILURE}. The following project failed: ${tsconfigPath}\n`);
+    logger.warn(`\n${MIGRATION_AOT_FAILURE} The following project failed: ${tsconfigPath}\n`);
     logger.error(`${e.toString()}\n`);
     return null;
   }

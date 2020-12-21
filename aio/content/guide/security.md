@@ -118,11 +118,9 @@ Angular recognizes the value as unsafe and automatically sanitizes it, which rem
 tag but keeps safe content such as the `<b>` element.
 
 
-<figure class="lightbox">
-  <div class="card">
-    <img src='generated/images/guide/security/binding-inner-html.png' alt='A screenshot showing interpolated and bound HTML values'>
-  </div>
-</figure>
+<div class="lightbox">
+  <img src='generated/images/guide/security/binding-inner-html.png' alt='A screenshot showing interpolated and bound HTML values'>
+</div>
 
 
 ### Direct use of the DOM APIs and explicit sanitization calls
@@ -143,9 +141,9 @@ as [described below](#bypass-security-apis).
 
 Content Security Policy (CSP) is a defense-in-depth
 technique to prevent XSS. To enable CSP, configure your web server to return an appropriate
-`Content-Security-Policy` HTTP header. Read more about content security policy at
-[An Introduction to Content Security Policy](http://www.html5rocks.com/en/tutorials/security/content-security-policy/)
-on the HTML5Rocks website.
+`Content-Security-Policy` HTTP header. Read more about content security policy at the 
+[Web Fundamentals guide](https://developers.google.com/web/fundamentals/security/csp) on the
+Google Developers website.
 
 
 {@a offline-template-compiler}
@@ -211,11 +209,9 @@ this, mark the URL value as a trusted URL using the `bypassSecurityTrustUrl` cal
 
 
 
-<figure class="lightbox">
-  <div class="card">
-    <img src='generated/images/guide/security/bypass-security-component.png' alt='A screenshot showing an alert box created from a trusted URL'>
-  </div>
-</figure>
+<div class="lightbox">
+  <img src='generated/images/guide/security/bypass-security-component.png' alt='A screenshot showing an alert box created from a trusted URL'>
+</div>
 
 
 
@@ -280,16 +276,16 @@ This technique is effective because all browsers implement the _same origin poli
 on which cookies are set can read the cookies from that site and set custom headers on requests to that site.
 That means only your application can read this cookie token and set the custom header. The malicious code on `evil.com` can't.
 
-Angular's `HttpClient` has built-in support for the client-side half of this technique. Read about it more in the [HttpClient guide](/guide/http).
+Angular's `HttpClient` has built-in support for the client-side half of this technique. Read about it more in the [HttpClient guide](/guide/http#security-xsrf-protection).
 
 For information about CSRF at the Open Web Application Security Project (OWASP), see
-<a href="https://www.owasp.org/index.php/Cross-Site_Request_Forgery_%28CSRF%29">Cross-Site Request Forgery (CSRF)</a> and
-<a href="https://www.owasp.org/index.php/CSRF_Prevention_Cheat_Sheet">Cross-Site Request Forgery (CSRF) Prevention Cheat Sheet</a>.
+[Cross-Site Request Forgery (CSRF)](https://owasp.org/www-community/attacks/csrf) and
+[Cross-Site Request Forgery (CSRF) Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html).
 The Stanford University paper
-<a href="https://seclab.stanford.edu/websec/csrf/csrf.pdf">Robust Defenses for Cross-Site Request Forgery</a> is a rich source of detail.
+[Robust Defenses for Cross-Site Request Forgery](https://seclab.stanford.edu/websec/csrf/csrf.pdf) is a rich source of detail.
 
 See also Dave Smith's easy-to-understand
-<a href="https://www.youtube.com/watch?v=9inczw6qtpY" title="Cross Site Request Funkery Securing Your Angular Apps From Evil Doers">talk on XSRF at AngularConnect 2016</a>.
+[talk on XSRF at AngularConnect 2016](https://www.youtube.com/watch?v=9inczw6qtpY "Cross Site Request Funkery Securing Your Angular Apps From Evil Doers").
 
 
 <h3 id='xssi'>

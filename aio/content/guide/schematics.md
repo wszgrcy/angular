@@ -1,4 +1,4 @@
-# Schematics
+# Generating code using schematics
 
 A schematic is a template-based code generator that supports complex logic.
 It is a set of instructions for transforming a software project by generating or modifying code.
@@ -21,7 +21,7 @@ The subcommands for `ng generate` are shorthand for the corresponding schematic.
 ng generate my-schematic-collection:my-schematic-name
 </code-example>
 
-&mdash;or&mdash;
+or
 
 <code-example language="bash">
 ng generate my-schematic-name --collection collection-name

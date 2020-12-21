@@ -1,4 +1,4 @@
-# Feature Modules
+# Feature modules
 
 Feature modules are NgModules for the purpose of organizing code.
 
@@ -79,7 +79,7 @@ To incorporate the feature module into your app, you have to let the root module
 <code-example path="feature-modules/src/app/app.module.ts" region="app-module" header="src/app/app.module.ts"></code-example>
 
 
-Now the `AppModule` knows about the feature module. If you were to add any service providers to the feature module, `AppModule` would know about those too, as would any other feature modules. However, NgModules don’t expose their components.
+Now the `AppModule` knows about the feature module. If you were to add any service providers to the feature module, `AppModule` would know about those too, as would any other feature modules. However, NgModules don’t expose their components by default.
 
 
 ## Rendering a feature module’s component template
@@ -102,12 +102,9 @@ Next, in the `AppComponent`, `app.component.html`, add the tag `<app-customer-da
 
 Now, in addition to the title that renders by default, the `CustomerDashboardComponent` template renders too:
 
-
-<figure class="lightbox">
-  <div class="card">
-    <img src="generated/images/guide/feature-modules/feature-module.png" alt="feature module component">
-  </div>
-</figure>
+<div class="lightbox">
+  <img src="generated/images/guide/feature-modules/feature-module.png" alt="feature module component">
+</div>
 
 <hr />
 

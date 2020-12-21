@@ -1,29 +1,27 @@
 /**
  * @license
- * Copyright Google Inc. All Rights Reserved.
+ * Copyright Google LLC All Rights Reserved.
  *
  * Use of this source code is governed by an MIT-style license that can be
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {AotSummaryResolver, CompileDirectiveSummary, CompileMetadataResolver, CompileNgModuleMetadata, CompilePipeSummary, CompilerConfig, DirectiveNormalizer, DirectiveResolver, DomElementSchemaRegistry, FormattedError, FormattedMessageChain, HtmlParser, I18NHtmlParser, JitSummaryResolver, Lexer, NgAnalyzedModules, NgModuleResolver, ParseTreeResult, Parser, PipeResolver, ResourceLoader, StaticReflector, StaticSymbol, StaticSymbolCache, StaticSymbolResolver, TemplateParser, analyzeNgModules, createOfflineCompileUrlResolver, isFormattedError} from '@angular/compiler';
+import {analyzeNgModules, AotSummaryResolver, CompileDirectiveSummary, CompileMetadataResolver, CompileNgModuleMetadata, CompilePipeSummary, CompilerConfig, DirectiveNormalizer, DirectiveResolver, DomElementSchemaRegistry, FormattedError, FormattedMessageChain, HtmlParser, isFormattedError, JitSummaryResolver, Lexer, NgAnalyzedModules, NgModuleResolver, Parser, ParseTreeResult, PipeResolver, ResourceLoader, StaticReflector, StaticSymbol, StaticSymbolCache, StaticSymbolResolver, TemplateParser, UrlResolver} from '@angular/compiler';
 import {SchemaMetadata, ViewEncapsulation, ɵConsole as Console} from '@angular/core';
-import * as ts from 'typescript';
+import * as path from 'path';
 import * as tss from 'typescript/lib/tsserverlibrary';
 
-import {AstResult, isAstResult} from './common';
 import {createLanguageService} from './language_service';
 import {ReflectorHost} from './reflector_host';
-import {ExternalTemplate, InlineTemplate, getClassDeclFromDecoratorProp, getPropertyAssignmentFromValue} from './template';
-import {Declaration, DeclarationError, Diagnostic, DiagnosticKind, DiagnosticMessageChain, LanguageService, LanguageServiceHost, Span, TemplateSource} from './types';
-import {findTightestNode, getDirectiveClassLike} from './utils';
-
+import {ExternalTemplate, InlineTemplate} from './template';
+import {findTightestNode, getClassDeclFromDecoratorProp, getDirectiveClassLike, getPropertyAssignmentFromValue} from './ts_utils';
+import {AstResult, Declaration, DeclarationError, DiagnosticMessageChain, LanguageService, LanguageServiceHost, Span, TemplateSource} from './types';
 
 /**
  * Create a `LanguageServiceHost`
  */
 export function createLanguageServiceFromTypescript(
-    host: ts.LanguageServiceHost, service: ts.LanguageService): LanguageService {
+    host: tss.LanguageServiceHost, service: tss.LanguageService): LanguageService {
   const ngHost = new TypeScriptServiceHost(host, service);
   const ngServer = createLanguageService(ngHost);
   return ngServer;
@@ -36,14 +34,18 @@ export function createLanguageServiceFromTypescript(
  * syntactically incorrect templates.
  */
 export class DummyHtmlParser extends HtmlParser {
-  parse(): ParseTreeResult { return new ParseTreeResult([], []); }
+  parse(): ParseTreeResult {
+    return new ParseTreeResult([], []);
+  }
 }
 
 /**
  * Avoid loading resources in the language servcie by using a dummy loader.
  */
 export class DummyResourceLoader extends ResourceLoader {
-  get(url: string): Promise<string> { return Promise.resolve(''); }
+  get(_url: string): Promise<string> {
+    return Promise.resolve('');
+  }
 }
 
 /**
@@ -63,29 +65,46 @@ export class TypeScriptServiceHost implements LanguageServiceHost {
   private readonly fileToComponent = new Map<string, StaticSymbol>();
   private readonly collectedErrors = new Map<string, any[]>();
   private readonly fileVersions = new Map<string, string>();
+  private readonly urlResolver: UrlResolver;
 
-  private lastProgram: ts.Program|undefined = undefined;
-  private templateReferences: string[] = [];
+  private lastProgram: tss.Program|undefined = undefined;
   private analyzedModules: NgAnalyzedModules = {
     files: [],
     ngModuleByPipeOrDirective: new Map(),
     ngModules: [],
   };
 
-  constructor(
-      readonly tsLsHost: ts.LanguageServiceHost, private readonly tsLS: ts.LanguageService) {
+  constructor(readonly tsLsHost: tss.LanguageServiceHost, readonly tsLS: tss.LanguageService) {
     this.summaryResolver = new AotSummaryResolver(
         {
-          loadSummary(filePath: string) { return null; },
-          isSourceFile(sourceFilePath: string) { return true; },
-          toSummaryFileName(sourceFilePath: string) { return sourceFilePath; },
-          fromSummaryFileName(filePath: string): string{return filePath;},
+          loadSummary(_filePath: string) {
+            return null;
+          },
+          isSourceFile(_sourceFilePath: string) {
+            return true;
+          },
+          toSummaryFileName(sourceFilePath: string) {
+            return sourceFilePath;
+          },
+          fromSummaryFileName(filePath: string): string {
+            return filePath;
+          },
         },
         this.staticSymbolCache);
     this.reflectorHost = new ReflectorHost(() => this.program, tsLsHost);
     this.staticSymbolResolver = new StaticSymbolResolver(
         this.reflectorHost, this.staticSymbolCache, this.summaryResolver,
         (e, filePath) => this.collectError(e, filePath));
+    this.urlResolver = {
+      resolve: (baseUrl: string, url: string) => {
+        // In practice, `directoryExists` is always defined.
+        // https://github.com/microsoft/TypeScript/blob/0b6c9254a850dd07056259d4eefca7721745af75/src/server/project.ts#L1608-L1614
+        if (tsLsHost.directoryExists!(baseUrl)) {
+          return path.resolve(baseUrl, url);
+        }
+        return path.resolve(path.dirname(baseUrl), url);
+      }
+    };
   }
 
   // The resolver is instantiated lazily and should not be accessed directly.
@@ -118,7 +137,6 @@ export class TypeScriptServiceHost implements LanguageServiceHost {
     const pipeResolver = new PipeResolver(staticReflector);
     const elementSchemaRegistry = new DomElementSchemaRegistry();
     const resourceLoader = new DummyResourceLoader();
-    const urlResolver = createOfflineCompileUrlResolver();
     const htmlParser = new DummyHtmlParser();
     // This tracks the CompileConfig in codegen.ts. Currently these options
     // are hard-coded.
@@ -127,7 +145,7 @@ export class TypeScriptServiceHost implements LanguageServiceHost {
       useJit: false,
     });
     const directiveNormalizer =
-        new DirectiveNormalizer(resourceLoader, urlResolver, htmlParser, config);
+        new DirectiveNormalizer(resourceLoader, this.urlResolver, htmlParser, config);
     this._resolver = new CompileMetadataResolver(
         config, htmlParser, moduleResolver, directiveResolver, pipeResolver,
         new JitSummaryResolver(), elementSchemaRegistry, directiveNormalizer, new Console(),
@@ -144,7 +162,12 @@ export class TypeScriptServiceHost implements LanguageServiceHost {
     return this.resolver.getReflector() as StaticReflector;
   }
 
-  getTemplateReferences(): string[] { return [...this.templateReferences]; }
+  /**
+   * Return all known external templates.
+   */
+  getExternalTemplates(): string[] {
+    return [...this.fileToComponent.keys()];
+  }
 
   /**
    * Checks whether the program has changed and returns all analyzed modules.
@@ -152,43 +175,113 @@ export class TypeScriptServiceHost implements LanguageServiceHost {
    * and templateReferences.
    * In addition to returning information about NgModules, this method plays the
    * same role as 'synchronizeHostData' in tsserver.
-   * @param ensureSynchronized whether or not the Language Service should make sure analyzedModules
-   *   are synced to the last update of the project. If false, returns the set of analyzedModules
-   *   that is already cached. This is useful if the project must not be reanalyzed, even if its
-   *   file watchers (which are disjoint from the TypeScriptServiceHost) detect an update.
    */
-  getAnalyzedModules(ensureSynchronized = true): NgAnalyzedModules {
-    if (!ensureSynchronized || this.upToDate()) {
+  getAnalyzedModules(): NgAnalyzedModules {
+    if (this.upToDate()) {
       return this.analyzedModules;
     }
 
     // Invalidate caches
-    this.templateReferences = [];
     this.fileToComponent.clear();
     this.collectedErrors.clear();
     this.resolver.clearCache();
 
-    const analyzeHost = {isSourceFile(filePath: string) { return true; }};
+    const analyzeHost = {
+      isSourceFile(_filePath: string) {
+        return true;
+      }
+    };
     const programFiles = this.program.getSourceFiles().map(sf => sf.fileName);
-    this.analyzedModules =
-        analyzeNgModules(programFiles, analyzeHost, this.staticSymbolResolver, this.resolver);
+
+    try {
+      this.analyzedModules =
+          analyzeNgModules(programFiles, analyzeHost, this.staticSymbolResolver, this.resolver);
+    } catch (e) {
+      // Analyzing modules may throw; in that case, reuse the old modules.
+      this.error(`Analyzing NgModules failed. ${e}`);
+      return this.analyzedModules;
+    }
 
     // update template references and fileToComponent
-    const urlResolver = createOfflineCompileUrlResolver();
     for (const ngModule of this.analyzedModules.ngModules) {
       for (const directive of ngModule.declaredDirectives) {
-        const {metadata} = this.resolver.getNonNormalizedDirectiveMetadata(directive.reference) !;
+        const {metadata} = this.resolver.getNonNormalizedDirectiveMetadata(directive.reference)!;
         if (metadata.isComponent && metadata.template && metadata.template.templateUrl) {
-          const templateName = urlResolver.resolve(
+          const templateName = this.urlResolver.resolve(
               this.reflector.componentModuleUrl(directive.reference),
               metadata.template.templateUrl);
           this.fileToComponent.set(templateName, directive.reference);
-          this.templateReferences.push(templateName);
         }
       }
     }
 
     return this.analyzedModules;
+  }
+
+  /**
+   * Checks whether the program has changed, and invalidate static symbols in
+   * the source files that have changed.
+   * Returns true if modules are up-to-date, false otherwise.
+   * This should only be called by getAnalyzedModules().
+   */
+  private upToDate(): boolean {
+    const {lastProgram, program} = this;
+    if (lastProgram === program) {
+      return true;
+    }
+    this.lastProgram = program;
+
+    // Even though the program has changed, it could be the case that none of
+    // the source files have changed. If all source files remain the same, then
+    // program is still up-to-date, and we should not invalidate caches.
+    let filesAdded = 0;
+    const filesChangedOrRemoved: string[] = [];
+
+    // Check if any source files have been added / changed since last computation.
+    const seen = new Set<string>();
+    const ANGULAR_CORE = '@angular/core';
+    const corePath = this.reflectorHost.moduleNameToFileName(ANGULAR_CORE);
+    for (const {fileName} of program.getSourceFiles()) {
+      // If `@angular/core` is edited, the language service would have to be
+      // restarted, so ignore changes to `@angular/core`.
+      // When the StaticReflector is initialized at startup, it loads core
+      // symbols from @angular/core by calling initializeConversionMap(). This
+      // is only done once. If the file is invalidated, some of the core symbols
+      // will be lost permanently.
+      if (fileName === corePath) {
+        continue;
+      }
+      seen.add(fileName);
+      const version = this.tsLsHost.getScriptVersion(fileName);
+      const lastVersion = this.fileVersions.get(fileName);
+      if (lastVersion === undefined) {
+        filesAdded++;
+        this.fileVersions.set(fileName, version);
+      } else if (version !== lastVersion) {
+        filesChangedOrRemoved.push(fileName);  // changed
+        this.fileVersions.set(fileName, version);
+      }
+    }
+
+    // Check if any source files have been removed since last computation.
+    for (const [fileName] of this.fileVersions) {
+      if (!seen.has(fileName)) {
+        filesChangedOrRemoved.push(fileName);  // removed
+        // Because Maps are iterated in insertion order, it is safe to delete
+        // entries from the same map while iterating.
+        // See https://stackoverflow.com/questions/35940216 and
+        // https://www.ecma-international.org/ecma-262/10.0/index.html#sec-map.prototype.foreach
+        this.fileVersions.delete(fileName);
+      }
+    }
+
+    for (const fileName of filesChangedOrRemoved) {
+      const symbols = this.staticSymbolResolver.invalidateFile(fileName);
+      this.reflector.invalidateSymbols(symbols);
+    }
+
+    // Program is up-to-date iff no files are added, changed, or removed.
+    return filesAdded === 0 && filesChangedOrRemoved.length === 0;
   }
 
   /**
@@ -199,17 +292,17 @@ export class TypeScriptServiceHost implements LanguageServiceHost {
     const results: TemplateSource[] = [];
     if (fileName.endsWith('.ts')) {
       // Find every template string in the file
-      const visit = (child: ts.Node) => {
+      const visit = (child: tss.Node) => {
         const template = this.getInternalTemplate(child);
         if (template) {
           results.push(template);
         } else {
-          ts.forEachChild(child, visit);
+          tss.forEachChild(child, visit);
         }
       };
       const sourceFile = this.getSourceFile(fileName);
       if (sourceFile) {
-        ts.forEachChild(sourceFile, visit);
+        tss.forEachChild(sourceFile, visit);
       }
     } else {
       const template = this.getExternalTemplate(fileName);
@@ -236,12 +329,12 @@ export class TypeScriptServiceHost implements LanguageServiceHost {
       return [];
     }
     const results: Declaration[] = [];
-    const visit = (child: ts.Node) => {
+    const visit = (child: tss.Node) => {
       const candidate = getDirectiveClassLike(child);
       if (candidate) {
-        const {decoratorId, classDecl} = candidate;
-        const declarationSpan = spanOf(decoratorId);
-        const className = classDecl.name !.text;
+        const {classId} = candidate;
+        const declarationSpan = spanOf(classId);
+        const className = classId.getText();
         const classSymbol = this.reflector.getStaticSymbol(sourceFile.fileName, className);
         // Ask the resolver to check if candidate is actually Angular directive
         if (!this.resolver.isDirective(classSymbol)) {
@@ -261,63 +354,25 @@ export class TypeScriptServiceHost implements LanguageServiceHost {
         child.forEachChild(visit);
       }
     };
-    ts.forEachChild(sourceFile, visit);
+    tss.forEachChild(sourceFile, visit);
 
     return results;
   }
 
-  getSourceFile(fileName: string): ts.SourceFile|undefined {
+  getSourceFile(fileName: string): tss.SourceFile|undefined {
     if (!fileName.endsWith('.ts')) {
       throw new Error(`Non-TS source file requested: ${fileName}`);
     }
     return this.program.getSourceFile(fileName);
   }
 
-  get program(): ts.Program {
+  get program(): tss.Program {
     const program = this.tsLS.getProgram();
     if (!program) {
       // Program is very very unlikely to be undefined.
       throw new Error('No program in language service!');
     }
     return program;
-  }
-
-  /**
-   * Checks whether the program has changed, and invalidate caches if it has.
-   * Returns true if modules are up-to-date, false otherwise.
-   * This should only be called by getAnalyzedModules().
-   */
-  private upToDate(): boolean {
-    const {lastProgram, program} = this;
-    if (lastProgram === program) {
-      return true;
-    }
-    this.lastProgram = program;
-
-    // Invalidate file that have changed in the static symbol resolver
-    const seen = new Set<string>();
-    for (const sourceFile of program.getSourceFiles()) {
-      const fileName = sourceFile.fileName;
-      seen.add(fileName);
-      const version = this.tsLsHost.getScriptVersion(fileName);
-      const lastVersion = this.fileVersions.get(fileName);
-      this.fileVersions.set(fileName, version);
-      // Should not invalidate file on the first encounter or if file hasn't changed
-      if (lastVersion !== undefined && version !== lastVersion) {
-        const symbols = this.staticSymbolResolver.invalidateFile(fileName);
-        this.reflector.invalidateSymbols(symbols);
-      }
-    }
-
-    // Remove file versions that are no longer in the program and invalidate them.
-    const missing = Array.from(this.fileVersions.keys()).filter(f => !seen.has(f));
-    missing.forEach(f => {
-      this.fileVersions.delete(f);
-      const symbols = this.staticSymbolResolver.invalidateFile(f);
-      this.reflector.invalidateSymbols(symbols);
-    });
-
-    return false;
   }
 
   /**
@@ -333,12 +388,12 @@ export class TypeScriptServiceHost implements LanguageServiceHost {
    *
    * @param node Potential template node
    */
-  private getInternalTemplate(node: ts.Node): TemplateSource|undefined {
-    if (!ts.isStringLiteralLike(node)) {
+  private getInternalTemplate(node: tss.Node): TemplateSource|undefined {
+    if (!tss.isStringLiteralLike(node)) {
       return;
     }
-    const tmplAsgn = getPropertyAssignmentFromValue(node);
-    if (!tmplAsgn || tmplAsgn.name.getText() !== 'template') {
+    const tmplAsgn = getPropertyAssignmentFromValue(node, 'template');
+    if (!tmplAsgn) {
       return;
     }
     const classDecl = getClassDeclFromDecoratorProp(tmplAsgn);
@@ -374,7 +429,7 @@ export class TypeScriptServiceHost implements LanguageServiceHost {
     // TODO: This only considers top-level class declarations in a source file.
     // This would not find a class declaration in a namespace, for example.
     const classDecl = sourceFile.forEachChild((child) => {
-      if (ts.isClassDeclaration(child) && child.name && child.name.text === classSymbol.name) {
+      if (tss.isClassDeclaration(child) && child.name && child.name.text === classSymbol.name) {
         return child;
       }
     });
@@ -395,7 +450,7 @@ export class TypeScriptServiceHost implements LanguageServiceHost {
     }
   }
 
-  private getCollectedErrors(defaultSpan: Span, sourceFile: ts.SourceFile): DeclarationError[] {
+  private getCollectedErrors(defaultSpan: Span, sourceFile: tss.SourceFile): DeclarationError[] {
     const errors = this.collectedErrors.get(sourceFile.fileName);
     if (!errors) {
       return [];
@@ -436,19 +491,7 @@ export class TypeScriptServiceHost implements LanguageServiceHost {
     if (!template) {
       return;
     }
-    const astResult = this.getTemplateAst(template);
-    if (!isAstResult(astResult)) {
-      return;
-    }
-    return astResult;
-  }
-
-  /**
-   * Gets a StaticSymbol from a file and symbol name.
-   * @return Angular StaticSymbol matching the file and name, if any
-   */
-  getStaticSymbol(file: string, name: string): StaticSymbol|undefined {
-    return this.reflector.getStaticSymbol(file, name);
+    return this.getTemplateAst(template);
   }
 
   /**
@@ -485,57 +528,42 @@ export class TypeScriptServiceHost implements LanguageServiceHost {
   }
 
   /**
-   * Parse the `template` and return its AST if there's no error. Otherwise
-   * return a Diagnostic message.
+   * Parse the `template` and return its AST, if any.
    * @param template template to be parsed
    */
-  getTemplateAst(template: TemplateSource): AstResult|Diagnostic {
+  getTemplateAst(template: TemplateSource): AstResult|undefined {
     const {type: classSymbol, fileName} = template;
-    try {
-      const data = this.resolver.getNonNormalizedDirectiveMetadata(classSymbol);
-      if (!data) {
-        return {
-          kind: DiagnosticKind.Error,
-          message: `No metadata found for '${classSymbol.name}' in ${fileName}.`,
-          span: template.span,
-        };
-      }
-      const htmlParser = new I18NHtmlParser(new HtmlParser());
-      const expressionParser = new Parser(new Lexer());
-      const parser = new TemplateParser(
-          new CompilerConfig(), this.reflector, expressionParser, new DomElementSchemaRegistry(),
-          htmlParser,
-          null !,  // console
-          []       // tranforms
-          );
-      const htmlResult = htmlParser.parse(template.source, fileName, {
-        tokenizeExpansionForms: true,
-        preserveLineEndings: true,  // do not convert CRLF to LF
-      });
-      const {directives, pipes, schemas} = this.getModuleMetadataForDirective(classSymbol);
-      const parseResult =
-          parser.tryParseHtml(htmlResult, data.metadata, directives, pipes, schemas);
-      if (!parseResult.templateAst) {
-        return {
-          kind: DiagnosticKind.Error,
-          message: `Failed to parse template for '${classSymbol.name}' in ${fileName}`,
-          span: template.span,
-        };
-      }
-      return {
-        htmlAst: htmlResult.rootNodes,
-        templateAst: parseResult.templateAst,
-        directive: data.metadata, directives, pipes,
-        parseErrors: parseResult.errors, expressionParser, template,
-      };
-    } catch (e) {
-      return {
-        kind: DiagnosticKind.Error,
-        message: e.message,
-        span:
-            e.fileName === fileName && template.query.getSpanAt(e.line, e.column) || template.span,
-      };
+    const data = this.resolver.getNonNormalizedDirectiveMetadata(classSymbol);
+    if (!data) {
+      return;
     }
+    const htmlParser = new HtmlParser();
+    const expressionParser = new Parser(new Lexer());
+    const parser = new TemplateParser(
+        new CompilerConfig(), this.reflector, expressionParser, new DomElementSchemaRegistry(),
+        htmlParser,
+        null,  // console
+        []     // tranforms
+    );
+    const htmlResult = htmlParser.parse(template.source, fileName, {
+      tokenizeExpansionForms: true,
+      preserveLineEndings: true,  // do not convert CRLF to LF
+    });
+    const {directives, pipes, schemas} = this.getModuleMetadataForDirective(classSymbol);
+    const parseResult = parser.tryParseHtml(htmlResult, data.metadata, directives, pipes, schemas);
+    if (!parseResult.templateAst) {
+      return;
+    }
+    return {
+      htmlAst: htmlResult.rootNodes,
+      templateAst: parseResult.templateAst,
+      directive: data.metadata,
+      directives,
+      pipes,
+      parseErrors: parseResult.errors,
+      expressionParser,
+      template,
+    };
   }
 
   /**
@@ -591,21 +619,21 @@ function findSuitableDefaultModule(modules: NgAnalyzedModules): CompileNgModuleM
   return result;
 }
 
-function spanOf(node: ts.Node): Span {
+function spanOf(node: tss.Node): Span {
   return {start: node.getStart(), end: node.getEnd()};
 }
 
-function spanAt(sourceFile: ts.SourceFile, line: number, column: number): Span|undefined {
+function spanAt(sourceFile: tss.SourceFile, line: number, column: number): Span|undefined {
   if (line != null && column != null) {
-    const position = ts.getPositionOfLineAndCharacter(sourceFile, line, column);
-    const findChild = function findChild(node: ts.Node): ts.Node | undefined {
-      if (node.kind > ts.SyntaxKind.LastToken && node.pos <= position && node.end > position) {
-        const betterNode = ts.forEachChild(node, findChild);
+    const position = tss.getPositionOfLineAndCharacter(sourceFile, line, column);
+    const findChild = function findChild(node: tss.Node): tss.Node|undefined {
+      if (node.kind > tss.SyntaxKind.LastToken && node.pos <= position && node.end > position) {
+        const betterNode = tss.forEachChild(node, findChild);
         return betterNode || node;
       }
     };
 
-    const node = ts.forEachChild(sourceFile, findChild);
+    const node = tss.forEachChild(sourceFile, findChild);
     if (node) {
       return {start: node.getStart(), end: node.getEnd()};
     }

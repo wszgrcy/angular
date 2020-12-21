@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright Google Inc. All Rights Reserved.
+ * Copyright Google LLC All Rights Reserved.
  *
  * Use of this source code is governed by an MIT-style license that can be
  * found in the LICENSE file at https://angular.io/license
@@ -15,6 +15,8 @@ module.exports =
     new Package('angular-api', [basePackage, typeScriptPackage])
 
         // Register the processors
+        .processor(require('./processors/mergeParameterInfo'))
+        .processor(require('./processors/processPseudoClasses'))
         .processor(require('./processors/splitDescription'))
         .processor(require('./processors/convertPrivateClassesToInterfaces'))
         .processor(require('./processors/generateApiListDoc'))
@@ -24,6 +26,8 @@ module.exports =
         .processor(require('./processors/extractPipeParams'))
         .processor(require('./processors/matchUpDirectiveDecorators'))
         .processor(require('./processors/addMetadataAliases'))
+        .processor(require('./processors/addGlobalApiData'))
+        .processor(require('./processors/updateGlobalApiPath'))
         .processor(require('./processors/computeApiBreadCrumbs'))
         .processor(require('./processors/filterContainedDocs'))
         .processor(require('./processors/processClassLikeMembers'))
@@ -74,7 +78,6 @@ module.exports =
         .config(function(
             readTypeScriptModules, readFilesProcessor, collectExamples, tsParser,
             packageContentFileReader) {
-
           // Tell TypeScript how to load modules that start with with `@angular`
           tsParser.options.paths = {'@angular/*': [API_SOURCE_PATH + '/*']};
           tsParser.options.baseUrl = '.';
@@ -95,6 +98,7 @@ module.exports =
             'common/testing/index.ts',
             'common/upgrade/index.ts',
             'core/index.ts',
+            'core/global/index.ts',
             'core/testing/index.ts',
             'elements/index.ts',
             'forms/index.ts',
@@ -178,14 +182,11 @@ module.exports =
         })
 
         .config(function(filterMembers) {
-          filterMembers.notAllowedPatterns.push(
-            /^ɵ/
-          );
+          filterMembers.notAllowedPatterns.push(/^ɵ/);
         })
 
 
         .config(function(computePathsProcessor, EXPORT_DOC_TYPES, generateApiListDoc) {
-
           const API_SEGMENT = 'api';
 
           generateApiListDoc.outputFolder = API_SEGMENT;

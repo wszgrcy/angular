@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright Google Inc. All Rights Reserved.
+ * Copyright Google LLC All Rights Reserved.
  *
  * Use of this source code is governed by an MIT-style license that can be
  * found in the LICENSE file at https://angular.io/license
@@ -10,7 +10,7 @@ import {Reference} from '../../../src/ngtsc/imports';
 import {ClassDeclaration, Decorator, isNamedClassDeclaration, isNamedFunctionDeclaration, isNamedVariableDeclaration} from '../../../src/ngtsc/reflection';
 import {MigrationHost} from './migration';
 
-export function isClassDeclaration(clazz: ts.Declaration): clazz is ClassDeclaration {
+export function isClassDeclaration(clazz: ts.Node): clazz is ClassDeclaration<ts.Declaration> {
   return isNamedClassDeclaration(clazz) || isNamedFunctionDeclaration(clazz) ||
       isNamedVariableDeclaration(clazz);
 }
@@ -43,7 +43,7 @@ export function hasConstructor(host: MigrationHost, clazz: ClassDeclaration): bo
  */
 export function createDirectiveDecorator(
     clazz: ClassDeclaration,
-    metadata?: {selector: string | null, exportAs: string[] | null}): Decorator {
+    metadata?: {selector: string|null, exportAs: string[]|null}): Decorator {
   const args: ts.Expression[] = [];
   if (metadata !== undefined) {
     const metaArgs: ts.PropertyAssignment[] = [];
@@ -51,7 +51,7 @@ export function createDirectiveDecorator(
       metaArgs.push(property('selector', metadata.selector));
     }
     if (metadata.exportAs !== null) {
-      metaArgs.push(property('exportAs', metadata.exportAs));
+      metaArgs.push(property('exportAs', metadata.exportAs.join(', ')));
     }
     args.push(reifySourceFile(ts.createObjectLiteral(metaArgs)));
   }
@@ -60,7 +60,8 @@ export function createDirectiveDecorator(
     identifier: null,
     import: {name: 'Directive', from: '@angular/core'},
     node: null,
-    synthesizedFor: clazz.name, args,
+    synthesizedFor: clazz.name,
+    args,
   };
 }
 
@@ -69,7 +70,7 @@ export function createDirectiveDecorator(
  */
 export function createComponentDecorator(
     clazz: ClassDeclaration,
-    metadata: {selector: string | null, exportAs: string[] | null}): Decorator {
+    metadata: {selector: string|null, exportAs: string[]|null}): Decorator {
   const metaArgs: ts.PropertyAssignment[] = [
     property('template', ''),
   ];
@@ -77,7 +78,7 @@ export function createComponentDecorator(
     metaArgs.push(property('selector', metadata.selector));
   }
   if (metadata.exportAs !== null) {
-    metaArgs.push(property('exportAs', metadata.exportAs));
+    metaArgs.push(property('exportAs', metadata.exportAs.join(', ')));
   }
   return {
     name: 'Component',
@@ -105,13 +106,8 @@ export function createInjectableDecorator(clazz: ClassDeclaration): Decorator {
   };
 }
 
-function property(name: string, value: string | string[]): ts.PropertyAssignment {
-  if (typeof value === 'string') {
-    return ts.createPropertyAssignment(name, ts.createStringLiteral(value));
-  } else {
-    return ts.createPropertyAssignment(
-        name, ts.createArrayLiteral(value.map(v => ts.createStringLiteral(v))));
-  }
+function property(name: string, value: string): ts.PropertyAssignment {
+  return ts.createPropertyAssignment(name, ts.createStringLiteral(value));
 }
 
 const EMPTY_SF = ts.createSourceFile('(empty)', '', ts.ScriptTarget.Latest);
@@ -132,5 +128,5 @@ function reifySourceFile(expr: ts.Expression): ts.Expression {
   if (!ts.isVariableStatement(stmt)) {
     throw new Error(`Expected VariableStatement, got ${ts.SyntaxKind[stmt.kind]}`);
   }
-  return stmt.declarationList.declarations[0].initializer !;
+  return stmt.declarationList.declarations[0].initializer!;
 }

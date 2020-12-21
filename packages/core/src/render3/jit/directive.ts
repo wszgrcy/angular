@@ -1,12 +1,12 @@
 /**
  * @license
- * Copyright Google Inc. All Rights Reserved.
+ * Copyright Google LLC All Rights Reserved.
  *
  * Use of this source code is governed by an MIT-style license that can be
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {R3DirectiveMetadataFacade, getCompilerFacade} from '../../compiler/compiler_facade';
+import {getCompilerFacade, R3DirectiveMetadataFacade} from '../../compiler/compiler_facade';
 import {R3ComponentMetadataFacade, R3QueryMetadataFacade} from '../../compiler/compiler_facade_interface';
 import {resolveForwardRef} from '../../di/forward_ref';
 import {getReflect, reflectDependencies} from '../../di/jit/util';
@@ -20,12 +20,26 @@ import {getComponentDef, getDirectiveDef} from '../definition';
 import {EMPTY_ARRAY, EMPTY_OBJ} from '../empty';
 import {NG_COMP_DEF, NG_DIR_DEF, NG_FACTORY_DEF} from '../fields';
 import {ComponentType} from '../interfaces/definition';
-import {stringifyForError} from '../util/misc_utils';
+import {stringifyForError} from '../util/stringify_utils';
 
 import {angularCoreEnv} from './environment';
+import {getJitOptions} from './jit_options';
 import {flushModuleScopingQueueAsMuchAsPossible, patchComponentDefWithScope, transitiveScopesFor} from './module';
 
-
+/**
+ * Keep track of the compilation depth to avoid reentrancy issues during JIT compilation. This
+ * matters in the following scenario:
+ *
+ * Consider a component 'A' that extends component 'B', both declared in module 'M'. During
+ * the compilation of 'A' the definition of 'B' is requested to capture the inheritance chain,
+ * potentially triggering compilation of 'B'. If this nested compilation were to trigger
+ * `flushModuleScopingQueueAsMuchAsPossible` it may happen that module 'M' is still pending in the
+ * queue, resulting in 'A' and 'B' to be patched with the NgModule scope. As the compilation of
+ * 'A' is still in progress, this would introduce a circular dependency on its compilation. To avoid
+ * this issue, the module scope queue is only flushed for compilations at the depth 0, to ensure
+ * all compilations have finished.
+ */
+let compilationDepth = 0;
 
 /**
  * Compile an Angular component according to its decorator metadata, and patch the resulting
@@ -68,33 +82,63 @@ export function compileComponent(type: Type<any>, metadata: Component): void {
           throw new Error(error.join('\n'));
         }
 
+        // This const was called `jitOptions` previously but had to be renamed to `options` because
+        // of a bug with Terser that caused optimized JIT builds to throw a `ReferenceError`.
+        // This bug was investigated in https://github.com/angular/angular-cli/issues/17264.
+        // We should not rename it back until https://github.com/terser/terser/issues/615 is fixed.
+        const options = getJitOptions();
+        let preserveWhitespaces = metadata.preserveWhitespaces;
+        if (preserveWhitespaces === undefined) {
+          if (options !== null && options.preserveWhitespaces !== undefined) {
+            preserveWhitespaces = options.preserveWhitespaces;
+          } else {
+            preserveWhitespaces = false;
+          }
+        }
+        let encapsulation = metadata.encapsulation;
+        if (encapsulation === undefined) {
+          if (options !== null && options.defaultEncapsulation !== undefined) {
+            encapsulation = options.defaultEncapsulation;
+          } else {
+            encapsulation = ViewEncapsulation.Emulated;
+          }
+        }
+
         const templateUrl = metadata.templateUrl || `ng:///${type.name}/template.html`;
         const meta: R3ComponentMetadataFacade = {
           ...directiveMetadata(type, metadata),
           typeSourceSpan: compiler.createParseSourceSpan('Component', type.name, templateUrl),
           template: metadata.template || '',
-          preserveWhitespaces: metadata.preserveWhitespaces || false,
+          preserveWhitespaces,
           styles: metadata.styles || EMPTY_ARRAY,
           animations: metadata.animations,
           directives: [],
           changeDetection: metadata.changeDetection,
           pipes: new Map(),
-          encapsulation: metadata.encapsulation || ViewEncapsulation.Emulated,
+          encapsulation,
           interpolation: metadata.interpolation,
           viewProviders: metadata.viewProviders || null,
         };
-        if (meta.usesInheritance) {
-          addDirectiveDefToUndecoratedParents(type);
+
+        compilationDepth++;
+        try {
+          if (meta.usesInheritance) {
+            addDirectiveDefToUndecoratedParents(type);
+          }
+          ngComponentDef = compiler.compileComponent(angularCoreEnv, templateUrl, meta);
+        } finally {
+          // Ensure that the compilation depth is decremented even when the compilation failed.
+          compilationDepth--;
         }
 
-        ngComponentDef = compiler.compileComponent(angularCoreEnv, templateUrl, meta);
-
-        // When NgModule decorator executed, we enqueued the module definition such that
-        // it would only dequeue and add itself as module scope to all of its declarations,
-        // but only if  if all of its declarations had resolved. This call runs the check
-        // to see if any modules that are in the queue can be dequeued and add scope to
-        // their declarations.
-        flushModuleScopingQueueAsMuchAsPossible();
+        if (compilationDepth === 0) {
+          // When NgModule decorator executed, we enqueued the module definition such that
+          // it would only dequeue and add itself as module scope to all of its declarations,
+          // but only if  if all of its declarations had resolved. This call runs the check
+          // to see if any modules that are in the queue can be dequeued and add scope to
+          // their declarations.
+          flushModuleScopingQueueAsMuchAsPossible();
+        }
 
         // If component compilation is async, then the @NgModule annotation which declares the
         // component may execute and set an ngSelectorScope property on the component type. This
@@ -114,7 +158,7 @@ export function compileComponent(type: Type<any>, metadata: Component): void {
 
 function hasSelectorScope<T>(component: Type<T>): component is Type<T>&
     {ngSelectorScope: Type<any>} {
-  return (component as{ngSelectorScope?: any}).ngSelectorScope !== undefined;
+  return (component as {ngSelectorScope?: any}).ngSelectorScope !== undefined;
 }
 
 /**
@@ -124,7 +168,7 @@ function hasSelectorScope<T>(component: Type<T>): component is Type<T>&
  * In the event that compilation is not immediate, `compileDirective` will return a `Promise` which
  * will resolve when compilation completes and the directive becomes usable.
  */
-export function compileDirective(type: Type<any>, directive: Directive | null): void {
+export function compileDirective(type: Type<any>, directive: Directive|null): void {
   let ngDirectiveDef: any = null;
 
   addDirectiveFactoryDef(type, directive || {});
@@ -158,7 +202,7 @@ function getDirectiveMetadata(type: Type<any>, metadata: Directive) {
   return {metadata: facade, sourceMapUrl};
 }
 
-function addDirectiveFactoryDef(type: Type<any>, metadata: Directive | Component) {
+function addDirectiveFactoryDef(type: Type<any>, metadata: Directive|Component) {
   let ngFactoryDef: any = null;
 
   Object.defineProperty(type, NG_FACTORY_DEF, {
@@ -189,7 +233,8 @@ export function extendsDirectlyFromObject(type: Type<any>): boolean {
  */
 export function directiveMetadata(type: Type<any>, metadata: Directive): R3DirectiveMetadataFacade {
   // Reflect inputs and outputs.
-  const propMetadata = getReflect().ownPropMetadata(type);
+  const reflect = getReflect();
+  const propMetadata = reflect.ownPropMetadata(type);
 
   return {
     name: type.name,
@@ -202,8 +247,8 @@ export function directiveMetadata(type: Type<any>, metadata: Directive): R3Direc
     inputs: metadata.inputs || EMPTY_ARRAY,
     outputs: metadata.outputs || EMPTY_ARRAY,
     queries: extractQueriesMetadata(type, propMetadata, isContentQuery),
-    lifecycle: {usesOnChanges: usesLifecycleHook(type, 'ngOnChanges')},
-    typeSourceSpan: null !,
+    lifecycle: {usesOnChanges: reflect.hasLifecycleHook(type, 'ngOnChanges')},
+    typeSourceSpan: null!,
     usesInheritance: !extendsDirectlyFromObject(type),
     exportAs: extractExportAs(metadata.exportAs),
     providers: metadata.providers || null,
@@ -216,7 +261,7 @@ export function directiveMetadata(type: Type<any>, metadata: Directive): R3Direc
  */
 function addDirectiveDefToUndecoratedParents(type: Type<any>) {
   const objPrototype = Object.prototype;
-  let parent = Object.getPrototypeOf(type);
+  let parent = Object.getPrototypeOf(type.prototype).constructor;
 
   // Go up the prototype until we hit `Object`.
   while (parent && parent !== objPrototype) {
@@ -269,7 +314,7 @@ function extractQueriesMetadata(
   return queriesMeta;
 }
 
-function extractExportAs(exportAs: string | undefined): string[]|null {
+function extractExportAs(exportAs: string|undefined): string[]|null {
   return exportAs === undefined ? null : splitByComma(exportAs);
 }
 
@@ -291,22 +336,19 @@ function splitByComma(value: string): string[] {
   return value.split(',').map(piece => piece.trim());
 }
 
-function usesLifecycleHook(type: Type<any>, name: string): boolean {
-  const prototype = type.prototype;
-  return prototype && prototype.hasOwnProperty(name);
-}
-
 const LIFECYCLE_HOOKS = [
   'ngOnChanges', 'ngOnInit', 'ngOnDestroy', 'ngDoCheck', 'ngAfterViewInit', 'ngAfterViewChecked',
   'ngAfterContentInit', 'ngAfterContentChecked'
 ];
 
 function shouldAddAbstractDirective(type: Type<any>): boolean {
-  if (LIFECYCLE_HOOKS.some(hookName => usesLifecycleHook(type, hookName))) {
+  const reflect = getReflect();
+
+  if (LIFECYCLE_HOOKS.some(hookName => reflect.hasLifecycleHook(type, hookName))) {
     return true;
   }
 
-  const propMetadata = getReflect().ownPropMetadata(type);
+  const propMetadata = reflect.propMetadata(type);
 
   for (const field in propMetadata) {
     const annotations = propMetadata[field];

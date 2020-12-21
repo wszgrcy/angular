@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright Google Inc. All Rights Reserved.
+ * Copyright Google LLC All Rights Reserved.
  *
  * Use of this source code is governed by an MIT-style license that can be
  * found in the LICENSE file at https://angular.io/license
@@ -21,7 +21,8 @@ export class TslintUpdateRecorder implements UpdateRecorder {
     // are handled in reverse and in case a decorator and import are inserted at
     // the start of the file, the class decorator should come after the import.
     this.failures.unshift(new RuleFailure(
-        this.sourceFile, node.getStart(), 0, `Class needs to be decorated with ` +
+        this.sourceFile, node.getStart(), 0,
+        `Class needs to be decorated with ` +
             `"${decoratorText}" because it has been provided by "${className}".`,
         this.ruleName, Replacement.appendText(node.getStart(), `${decoratorText}\n`)));
   }
@@ -52,6 +53,14 @@ export class TslintUpdateRecorder implements UpdateRecorder {
         `Decorator needs to be replaced with "${newText}" because it has been provided ` +
             `by "${className}"`,
         this.ruleName, fix));
+  }
+
+
+  updateObjectLiteral(node: ts.ObjectLiteralExpression, newText: string): void {
+    this.failures.push(new RuleFailure(
+        this.sourceFile, node.getStart(), node.getEnd(),
+        `Object literal needs to be updated to: ${newText}`, this.ruleName,
+        Replacement.replaceFromTo(node.getStart(), node.getEnd(), newText)));
   }
 
   commitUpdate() {}

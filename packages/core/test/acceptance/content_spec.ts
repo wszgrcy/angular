@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright Google Inc. All Rights Reserved.
+ * Copyright Google LLC All Rights Reserved.
  *
  * Use of this source code is governed by an MIT-style license that can be
  * found in the LICENSE file at https://angular.io/license
@@ -14,7 +14,6 @@ import {By} from '@angular/platform-browser';
 import {expect} from '@angular/platform-browser/testing/src/matchers';
 
 describe('projection', () => {
-
   function getElementHtml(element: HTMLElement) {
     return element.innerHTML.replace(/<!--(\W|\w)*?-->/g, '')
         .replace(/\sng-reflect-\S*="[^"]*"/g, '');
@@ -328,11 +327,13 @@ describe('projection', () => {
 
        @Directive({selector: '[trigger]'})
        class Trigger {
-         @Input() trigger !: Comp;
+         @Input() trigger!: Comp;
 
          constructor(public vcr: ViewContainerRef) {}
 
-         open() { this.vcr.createEmbeddedView(this.trigger.template); }
+         open() {
+           this.vcr.createEmbeddedView(this.trigger.template);
+         }
        }
 
        @Component({
@@ -753,7 +754,7 @@ describe('projection', () => {
 
     /**
      * Descending into projected content for selector-matching purposes is not supported
-     * today: http://plnkr.co/edit/MYQcNfHSTKp9KvbzJWVQ?p=preview
+     * today: https://plnkr.co/edit/MYQcNfHSTKp9KvbzJWVQ?p=preview
      */
     it('should not descend into re-projected content', () => {
       @Component({
@@ -861,7 +862,6 @@ describe('projection', () => {
 
       expect(getElementHtml(fixture.nativeElement))
           .toEqual('<child><span title="Some title">Has title</span></child>');
-
     });
 
     it('should match selectors against projected containers', () => {
@@ -934,7 +934,9 @@ describe('projection', () => {
   it('should project content if the change detector has been detached', () => {
     @Component({selector: 'my-comp', template: '<ng-content></ng-content>'})
     class MyComp {
-      constructor(changeDetectorRef: ChangeDetectorRef) { changeDetectorRef.detach(); }
+      constructor(changeDetectorRef: ChangeDetectorRef) {
+        changeDetectorRef.detach();
+      }
     }
 
     @Component({
@@ -953,6 +955,50 @@ describe('projection', () => {
     fixture.detectChanges();
 
     expect(fixture.nativeElement).toHaveText('hello');
+  });
+
+  it('should support ngProjectAs with a various number of other bindings and attributes', () => {
+    @Directive({selector: '[color],[margin]'})
+    class ElDecorator {
+      @Input() color?: string;
+      @Input() margin?: number;
+    }
+    @Component({
+      selector: 'card',
+      template: `
+        <ng-content select="[card-title]"></ng-content>
+        ---
+        <ng-content select="[card-subtitle]"></ng-content>
+        ---
+        <ng-content select="[card-content]"></ng-content>
+        ---
+        <ng-content select="[card-footer]"></ng-content>
+      `
+    })
+    class Card {
+    }
+
+    @Component({
+      selector: 'card-with-title',
+      template: `
+        <card>
+         <h1 [color]="'red'" [margin]="10" ngProjectAs="[card-title]">Title</h1>
+         <h2  xlink:href="google.com" ngProjectAs="[card-subtitle]">Subtitle</h2>
+         <div style="font-color: blue;" ngProjectAs="[card-content]">content</div>
+         <div [color]="'blue'" ngProjectAs="[card-footer]">footer</div>
+        </card>
+      `
+    })
+    class CardWithTitle {
+    }
+
+    TestBed.configureTestingModule({declarations: [Card, CardWithTitle, ElDecorator]});
+    const fixture = TestBed.createComponent(CardWithTitle);
+    fixture.detectChanges();
+
+    // Compare the text output, because Ivy and ViewEngine produce slightly different HTML.
+    expect(fixture.nativeElement.textContent)
+        .toContain('Title --- Subtitle --- content --- footer');
   });
 
   it('should support ngProjectAs on elements (including <ng-content>)', () => {
@@ -1064,7 +1110,9 @@ describe('projection', () => {
 
       @Directive({selector: 'div'})
       class DivDirective {
-        constructor() { divDirectives++; }
+        constructor() {
+          divDirectives++;
+        }
       }
 
       @Component({
@@ -1091,7 +1139,9 @@ describe('projection', () => {
 
       @Directive({selector: '[x]'})
       class XDirective {
-        constructor() { xDirectives++; }
+        constructor() {
+          xDirectives++;
+        }
       }
 
       @Component({
@@ -1118,7 +1168,9 @@ describe('projection', () => {
 
       @Directive({selector: '.x'})
       class XDirective {
-        constructor() { xDirectives++; }
+        constructor() {
+          xDirectives++;
+        }
       }
 
       @Component({
@@ -1155,7 +1207,9 @@ describe('projection', () => {
           {id: 2, name: 'two'},
           {id: 3, name: 'three'},
         ];
-        getItemId(item: {id: number}) { return item.id; }
+        getItemId(item: {id: number}) {
+          return item.id;
+        }
       }
 
       TestBed.configureTestingModule({declarations: [SelectedNgContentComp, SelectorMainComp]});
@@ -1163,6 +1217,53 @@ describe('projection', () => {
 
       fixture.detectChanges();
       expect(fixture.nativeElement).toHaveText('inline()ng-template(onetwothree)');
+    });
+
+    it('should project template content with `ngProjectAs` defined', () => {
+      @Component({
+        selector: 'projector-app',
+        template: `
+          Projected
+          <ng-content select="foo"></ng-content>
+          <ng-content select="[foo]"></ng-content>
+          <ng-content select=".foo"></ng-content>
+        `,
+      })
+      class ProjectorApp {
+      }
+
+      @Component({
+        selector: 'root-comp',
+        template: `
+          <projector-app>
+            <div *ngIf="show" ngProjectAs="foo">as element</div>
+            <div *ngIf="show" ngProjectAs="[foo]">as attribute</div>
+            <div *ngIf="show" ngProjectAs=".foo">as class</div>
+          </projector-app>
+        `,
+      })
+      class RootComp {
+        show = true;
+      }
+
+      TestBed.configureTestingModule({
+        declarations: [ProjectorApp, RootComp],
+      });
+      const fixture = TestBed.createComponent(RootComp);
+      fixture.detectChanges();
+
+      let content = fixture.nativeElement.textContent;
+      expect(content).toContain('as element');
+      expect(content).toContain('as attribute');
+      expect(content).toContain('as class');
+
+      fixture.componentInstance.show = false;
+      fixture.detectChanges();
+
+      content = fixture.nativeElement.textContent;
+      expect(content).not.toContain('as element');
+      expect(content).not.toContain('as attribute');
+      expect(content).not.toContain('as class');
     });
 
     describe('on containers', () => {
@@ -1174,7 +1275,9 @@ describe('projection', () => {
 
         @Directive({selector: '[x]'})
         class XDirective {
-          constructor() { xDirectives++; }
+          constructor() {
+            xDirectives++;
+          }
         }
 
         @Component({
@@ -1202,7 +1305,9 @@ describe('projection', () => {
 
         @Directive({selector: '.x'})
         class XDirective {
-          constructor() { xDirectives++; }
+          constructor() {
+            xDirectives++;
+          }
         }
 
         @Component({

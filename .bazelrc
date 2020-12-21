@@ -33,6 +33,11 @@ build --incompatible_strict_action_env
 run --incompatible_strict_action_env
 test --incompatible_strict_action_env
 
+# Do not build runfile trees by default. If an execution strategy relies on runfile
+# symlink teee, the tree is created on-demand. See: https://github.com/bazelbuild/bazel/issues/6627
+# and https://github.com/bazelbuild/bazel/commit/03246077f948f2790a83520e7dccc2625650e6df
+build --nobuild_runfile_links
+
 ###############################
 # Release support             #
 # Turn on these settings with #
@@ -42,7 +47,12 @@ test --incompatible_strict_action_env
 # Releases should always be stamped with version control info
 # This command assumes node on the path and is a workaround for
 # https://github.com/bazelbuild/bazel/issues/4802
-build:release --workspace_status_command="node ./tools/bazel_stamp_vars.js"
+build:release --workspace_status_command="yarn -s ng-dev release build-env-stamp --mode=release"
+build:release --stamp
+
+# Snapshots should also be stamped with version control information.
+build:snapshot --workspace_status_command="yarn -s ng-dev release build-env-stamp --mode=snapshot"
+build:snapshot --stamp
 
 ###############################
 # Output                      #
@@ -61,34 +71,25 @@ test --test_output=errors
 
 # Bazel flags for CircleCI are in /.circleci/bazel.linux.rc and /.circleci/bazel.windows.rc
 
+##################################
+# Settings for integration tests #
+##################################
+
+# Trick bazel into treating BUILD files under integration/bazel as being regular files
+# This lets us glob() up all the files inside this integration test to make them inputs to tests
+# (Note, we cannot use common --deleted_packages because the bazel version command doesn't support it)
+build --deleted_packages=integration/bazel,integration/bazel/src,integration/bazel/src/hello-world,integration/bazel/test,integration/bazel/tools,integration/bazel/test/e2e
+query --deleted_packages=integration/bazel,integration/bazel/src,integration/bazel/src/hello-world,integration/bazel/test,integration/bazel/tools,integration/bazel/test/e2e
+
 ################################
 # Temporary Settings for Ivy   #
 ################################
-# to determine if the compiler used should be Ivy or ViewEngine one can use `--define=compile=aot` on
-# any bazel target. This is a temporary flag until codebase is permanently switched to Ivy.
-build --define=compile=legacy
+# To determine if the compiler used should be Ivy instead of ViewEngine, one can use `--config=ivy`
+# on any bazel target. This is a temporary flag until codebase is permanently switched to Ivy.
+build --define=angular_ivy_enabled=False
 
-################################
-# Settings for rules_nodejs    #
-################################
-# Temporary define while angular depends on the legacy rollup_bundle rule.
-# TODO: remove this setting after https://github.com/angular/angular/pull/33201 lands.
-build --define=enable_legacy_rollup_rule=1
-
-#######################
-# Remote HTTP Caching #
-#######################
-build --remote_http_cache=https://storage.googleapis.com/angular-team-cache
-build --remote_accept_cached=true
-build --remote_upload_local_results=false
-
-######################################
-# Remote HTTP Caching writes support #
-# Turn on these settings with        #
-#  --config=-http-caching            #
-######################################
-build:remote-http-caching --remote_upload_local_results=true
-build:remote-http-caching --google_default_credentials
+build:view-engine --define=angular_ivy_enabled=False
+build:ivy --define=angular_ivy_enabled=True
 
 ##################################
 # Remote Build Execution support #
@@ -108,13 +109,16 @@ build:remote --remote_timeout=600
 build:remote --jobs=150
 build:remote --google_default_credentials
 
+# Force remote exeuctions to consider the entire run as linux
+build:remote --cpu=k8
+build:remote --host_cpu=k8
+
 # Toolchain and platform related flags
 build:remote --host_javabase=@rbe_ubuntu1604_angular//java:jdk
 build:remote --javabase=@rbe_ubuntu1604_angular//java:jdk
 build:remote --host_java_toolchain=@bazel_tools//tools/jdk:toolchain_hostjdk8
 build:remote --java_toolchain=@bazel_tools//tools/jdk:toolchain_hostjdk8
 build:remote --crosstool_top=@rbe_ubuntu1604_angular//cc:toolchain
-build:remote --action_env=BAZEL_DO_NOT_DETECT_CPP_TOOLCHAIN=1
 build:remote --extra_toolchains=@rbe_ubuntu1604_angular//config:cc-toolchain
 build:remote --extra_execution_platforms=//tools:rbe_ubuntu1604-angular
 build:remote --host_platform=//tools:rbe_ubuntu1604-angular
@@ -126,14 +130,15 @@ build:remote --project_id=internal-200822
 build:remote --remote_cache=remotebuildexecution.googleapis.com
 build:remote --remote_executor=remotebuildexecution.googleapis.com
 
-###############################
-# NodeJS rules settings
-# These settings are required for rules_nodejs
-###############################
+##################################
+# Saucelabs tests settings       #
+# Turn on these settings with    #
+#  --config=saucelabs            #
+##################################
 
-# Turn on managed directories feature in Bazel
-# This allows us to avoid installing a second copy of node_modules
-common --experimental_allow_incremental_repository_updates
+# For saucelabs tests we don't want to enable flaky test attempts. Karma has its own integrated
+# retry mechanism and we do not want to retry unnecessarily if Karma already tried multiple times.
+test:saucelabs --flaky_test_attempts=1
 
 ####################################################
 # User bazel configuration

@@ -1,18 +1,18 @@
 /**
  * @license
- * Copyright Google Inc. All Rights Reserved.
+ * Copyright Google LLC All Rights Reserved.
  *
  * Use of this source code is governed by an MIT-style license that can be
  * found in the LICENSE file at https://angular.io/license
  */
 
 import {flatten, sanitizeIdentifier} from '../../compile_metadata';
-import {BindingForm, BuiltinFunctionCall, LocalResolver, convertActionBinding, convertPropertyBinding, convertUpdateArguments} from '../../compiler_util/expression_converter';
+import {BindingForm, BuiltinFunctionCall, convertActionBinding, convertPropertyBinding, convertUpdateArguments, LocalResolver} from '../../compiler_util/expression_converter';
 import {ConstantPool} from '../../constant_pool';
 import * as core from '../../core';
-import {AST, AstMemoryEfficientTransformer, BindingPipe, BindingType, FunctionCall, ImplicitReceiver, Interpolation, LiteralArray, LiteralMap, LiteralPrimitive, ParsedEventType, PropertyRead} from '../../expression_parser/ast';
+import {AST, AstMemoryEfficientTransformer, BindingPipe, BindingType, FunctionCall, ImplicitReceiver, Interpolation, LiteralArray, LiteralMap, LiteralPrimitive, ParsedEventType, PropertyRead, ThisReceiver} from '../../expression_parser/ast';
 import {Lexer} from '../../expression_parser/lexer';
-import {Parser} from '../../expression_parser/parser';
+import {IvyParser} from '../../expression_parser/parser';
 import * as i18n from '../../i18n/i18n_ast';
 import * as html from '../../ml_parser/ast';
 import {HtmlParser} from '../../ml_parser/html_parser';
@@ -24,9 +24,10 @@ import {mapLiteral} from '../../output/map_util';
 import * as o from '../../output/output_ast';
 import {ParseError, ParseSourceSpan} from '../../parse_util';
 import {DomElementSchemaRegistry} from '../../schema/dom_element_schema_registry';
+import {isTrustedTypesSink} from '../../schema/trusted_types_sinks';
 import {CssSelector, SelectorMatcher} from '../../selector';
 import {BindingParser} from '../../template_parser/binding_parser';
-import {error} from '../../util';
+import {error, partitionArray} from '../../util';
 import * as t from '../r3_ast';
 import {Identifiers as R3} from '../r3_identifiers';
 import {htmlAstToRender3Ast} from '../r3_template_transform';
@@ -36,9 +37,9 @@ import {I18nContext} from './i18n/context';
 import {createGoogleGetMsgStatements} from './i18n/get_msg_utils';
 import {createLocalizeStatements} from './i18n/localize_utils';
 import {I18nMetaVisitor} from './i18n/meta';
-import {I18N_ICU_MAPPING_PREFIX, TRANSLATION_PREFIX, assembleBoundTextPlaceholders, assembleI18nBoundString, declareI18nVariable, getTranslationConstPrefix, i18nFormatPlaceholderNames, icuFromI18nMessage, isI18nRootNode, isSingleI18nIcu, placeholdersToParams, wrapI18nPlaceholder} from './i18n/util';
+import {assembleBoundTextPlaceholders, assembleI18nBoundString, declareI18nVariable, getTranslationConstPrefix, hasI18nMeta, I18N_ICU_MAPPING_PREFIX, i18nFormatPlaceholderNames, icuFromI18nMessage, isI18nRootNode, isSingleI18nIcu, placeholdersToParams, TRANSLATION_VAR_PREFIX, wrapI18nPlaceholder} from './i18n/util';
 import {StylingBuilder, StylingInstruction} from './styling_builder';
-import {CONTEXT_NAME, IMPLICIT_REFERENCE, NON_BINDABLE_ATTR, REFERENCE_PREFIX, RENDER_FLAGS, asLiteral, chainedInstruction, getAttrsForDirectiveMatching, getInterpolationArgsLength, invalid, trimTrailingNulls, unsupported} from './util';
+import {asLiteral, chainedInstruction, CONTEXT_NAME, getAttrsForDirectiveMatching, getInterpolationArgsLength, IMPLICIT_REFERENCE, invalid, NON_BINDABLE_ATTR, REFERENCE_PREFIX, RENDER_FLAGS, trimTrailingNulls, unsupported} from './util';
 
 
 
@@ -48,11 +49,14 @@ const NG_CONTENT_SELECT_ATTR = 'select';
 // Attribute name of `ngProjectAs`.
 const NG_PROJECT_AS_ATTR_NAME = 'ngProjectAs';
 
+// Global symbols available only inside event bindings.
+const EVENT_BINDING_SCOPE_GLOBALS = new Set<string>(['$event']);
+
 // List of supported global targets for event listeners
 const GLOBAL_TARGET_RESOLVERS = new Map<string, o.ExternalReference>(
     [['window', R3.resolveWindow], ['document', R3.resolveDocument], ['body', R3.resolveBody]]);
 
-const LEADING_TRIVIA_CHARS = [' ', '\n', '\r', '\t'];
+export const LEADING_TRIVIA_CHARS = [' ', '\n', '\r', '\t'];
 
 //  if (rf & flags) { .. }
 export function renderFlagCheckIfStmt(
@@ -61,21 +65,22 @@ export function renderFlagCheckIfStmt(
 }
 
 export function prepareEventListenerParameters(
-    eventAst: t.BoundEvent, handlerName: string | null = null,
-    scope: BindingScope | null = null): o.Expression[] {
+    eventAst: t.BoundEvent, handlerName: string|null = null,
+    scope: BindingScope|null = null): o.Expression[] {
   const {type, name, target, phase, handler} = eventAst;
   if (target && !GLOBAL_TARGET_RESOLVERS.has(target)) {
     throw new Error(`Unexpected global target '${target}' defined for '${name}' event.
         Supported list of global targets: ${Array.from(GLOBAL_TARGET_RESOLVERS.keys())}.`);
   }
 
+  const eventArgumentName = '$event';
+  const implicitReceiverAccesses = new Set<string>();
   const implicitReceiverExpr = (scope === null || scope.bindingLevel === 0) ?
       o.variable(CONTEXT_NAME) :
       scope.getOrCreateSharedContextVar(0);
   const bindingExpr = convertActionBinding(
       scope, implicitReceiverExpr, handler, 'b', () => error('Unexpected interpolation'),
-      eventAst.handlerSpan);
-
+      eventAst.handlerSpan, implicitReceiverAccesses, EVENT_BINDING_SCOPE_GLOBALS);
   const statements = [];
   if (scope) {
     statements.push(...scope.restoreViewStatement());
@@ -84,18 +89,50 @@ export function prepareEventListenerParameters(
   statements.push(...bindingExpr.render3Stmts);
 
   const eventName: string =
-      type === ParsedEventType.Animation ? prepareSyntheticListenerName(name, phase !) : name;
+      type === ParsedEventType.Animation ? prepareSyntheticListenerName(name, phase!) : name;
   const fnName = handlerName && sanitizeIdentifier(handlerName);
-  const fnArgs = [new o.FnParam('$event', o.DYNAMIC_TYPE)];
-  const handlerFn = o.fn(fnArgs, statements, o.INFERRED_TYPE, null, fnName);
+  const fnArgs: o.FnParam[] = [];
 
+  if (implicitReceiverAccesses.has(eventArgumentName)) {
+    fnArgs.push(new o.FnParam(eventArgumentName, o.DYNAMIC_TYPE));
+  }
+
+  const handlerFn = o.fn(fnArgs, statements, o.INFERRED_TYPE, null, fnName);
   const params: o.Expression[] = [o.literal(eventName), handlerFn];
   if (target) {
     params.push(
         o.literal(false),  // `useCapture` flag, defaults to `false`
-        o.importExpr(GLOBAL_TARGET_RESOLVERS.get(target) !));
+        o.importExpr(GLOBAL_TARGET_RESOLVERS.get(target)!));
   }
   return params;
+}
+
+// Collects information needed to generate `consts` field of the ComponentDef.
+export interface ComponentDefConsts {
+  /**
+   * When a constant requires some pre-processing (e.g. i18n translation block that includes
+   * goog.getMsg and $localize calls), the `prepareStatements` section contains corresponding
+   * statements.
+   */
+  prepareStatements: o.Statement[];
+
+  /**
+   * Actual expressions that represent constants.
+   */
+  constExpressions: o.Expression[];
+
+  /**
+   * Cache to avoid generating duplicated i18n translation blocks.
+   */
+  i18nVarRefsCache: Map<i18n.I18nMeta, o.ReadVarExpr>;
+}
+
+function createComponentDefConsts(): ComponentDefConsts {
+  return {
+    prepareStatements: [],
+    constExpressions: [],
+    i18nVarRefsCache: new Map(),
+  };
 }
 
 export class TemplateDefinitionBuilder implements t.Visitor<void>, LocalResolver {
@@ -166,7 +203,8 @@ export class TemplateDefinitionBuilder implements t.Visitor<void>, LocalResolver
       private directiveMatcher: SelectorMatcher|null, private directives: Set<o.Expression>,
       private pipeTypeByName: Map<string, o.Expression>, private pipes: Set<o.Expression>,
       private _namespace: o.ExternalReference, relativeContextFilePath: string,
-      private i18nUseExternalIds: boolean, private _constants: o.Expression[] = []) {
+      private i18nUseExternalIds: boolean,
+      private _constants: ComponentDefConsts = createComponentDefConsts()) {
     this._bindingScope = parentBindingScope.nestedScope(level);
 
     // Turn the relative context file path into an identifier by replacing non-alphanumeric
@@ -202,12 +240,12 @@ export class TemplateDefinitionBuilder implements t.Visitor<void>, LocalResolver
     // - this template has parent i18n context
     // - or the template has i18n meta associated with it,
     //   but it's not initiated by the Element (e.g. <ng-template i18n>)
-    const initI18nContext =
-        this.i18nContext || (isI18nRootNode(i18n) && !isSingleI18nIcu(i18n) &&
-                             !(isSingleElementTemplate(nodes) && nodes[0].i18n === i18n));
+    const initI18nContext = this.i18nContext ||
+        (isI18nRootNode(i18n) && !isSingleI18nIcu(i18n) &&
+         !(isSingleElementTemplate(nodes) && nodes[0].i18n === i18n));
     const selfClosingI18nInstruction = hasTextChildrenOnly(nodes);
     if (initI18nContext) {
-      this.i18nStart(null, i18n !, selfClosingI18nInstruction);
+      this.i18nStart(null, i18n!, selfClosingI18nInstruction);
     }
 
     // This is the initial pass through the nodes of this template. In this pass, we
@@ -290,20 +328,24 @@ export class TemplateDefinitionBuilder implements t.Visitor<void>, LocalResolver
   }
 
   // LocalResolver
-  getLocal(name: string): o.Expression|null { return this._bindingScope.get(name); }
+  getLocal(name: string): o.Expression|null {
+    return this._bindingScope.get(name);
+  }
 
   // LocalResolver
-  notifyImplicitReceiverUse(): void { this._bindingScope.notifyImplicitReceiverUse(); }
+  notifyImplicitReceiverUse(): void {
+    this._bindingScope.notifyImplicitReceiverUse();
+  }
 
   private i18nTranslate(
       message: i18n.Message, params: {[name: string]: o.Expression} = {}, ref?: o.ReadVarExpr,
       transformFn?: (raw: o.ReadVarExpr) => o.Expression): o.ReadVarExpr {
-    const _ref = ref || o.variable(this.constantPool.uniqueName(TRANSLATION_PREFIX));
+    const _ref = ref || this.i18nGenerateMainBlockVar();
     // Closure Compiler requires const names to start with `MSG_` but disallows any other const to
     // start with `MSG_`. We define a variable starting with `MSG_` just for the `goog.getMsg` call
     const closureVar = this.i18nGenerateClosureVar(message.id);
     const statements = getTranslationDeclStmts(message, _ref, closureVar, params, transformFn);
-    this.constantPool.statements.push(...statements);
+    this._constants.prepareStatements.push(...statements);
     return _ref;
   }
 
@@ -330,12 +372,11 @@ export class TemplateDefinitionBuilder implements t.Visitor<void>, LocalResolver
 
   private i18nAppendBindings(expressions: AST[]) {
     if (expressions.length > 0) {
-      expressions.forEach(expression => this.i18n !.appendBinding(expression));
+      expressions.forEach(expression => this.i18n!.appendBinding(expression));
     }
   }
 
-  private i18nBindProps(props: {[key: string]: t.Text | t.BoundText}):
-      {[key: string]: o.Expression} {
+  private i18nBindProps(props: {[key: string]: t.Text|t.BoundText}): {[key: string]: o.Expression} {
     const bound: {[key: string]: o.Expression} = {};
     Object.keys(props).forEach(key => {
       const prop = props[key];
@@ -346,7 +387,7 @@ export class TemplateDefinitionBuilder implements t.Visitor<void>, LocalResolver
         this.allocateBindingSlots(value);
         if (value instanceof Interpolation) {
           const {strings, expressions} = value;
-          const {id, bindings} = this.i18n !;
+          const {id, bindings} = this.i18n!;
           const label = assembleI18nBoundString(strings, bindings.size, id);
           this.i18nAppendBindings(expressions);
           bound[key] = o.literal(label);
@@ -356,6 +397,12 @@ export class TemplateDefinitionBuilder implements t.Visitor<void>, LocalResolver
     return bound;
   }
 
+  // Generates top level vars for i18n blocks (i.e. `i18n_N`).
+  private i18nGenerateMainBlockVar(): o.ReadVarExpr {
+    return o.variable(this.constantPool.uniqueName(TRANSLATION_VAR_PREFIX));
+  }
+
+  // Generates vars with Closure-specific names for i18n blocks (i.e. `MSG_XXX`).
   private i18nGenerateClosureVar(messageId: string): o.ReadVarExpr {
     let name: string;
     const suffix = this.fileBasedI18nSuffix.toUpperCase();
@@ -418,16 +465,13 @@ export class TemplateDefinitionBuilder implements t.Visitor<void>, LocalResolver
   private i18nStart(span: ParseSourceSpan|null = null, meta: i18n.I18nMeta, selfClosing?: boolean):
       void {
     const index = this.allocateDataSlot();
-    if (this.i18nContext) {
-      this.i18n = this.i18nContext.forkChildContext(index, this.templateIndex !, meta);
-    } else {
-      const ref = o.variable(this.constantPool.uniqueName(TRANSLATION_PREFIX));
-      this.i18n = new I18nContext(index, ref, 0, this.templateIndex, meta);
-    }
+    this.i18n = this.i18nContext ?
+        this.i18nContext.forkChildContext(index, this.templateIndex!, meta) :
+        new I18nContext(index, this.i18nGenerateMainBlockVar(), 0, this.templateIndex, meta);
 
     // generate i18nStart instruction
     const {id, ref} = this.i18n;
-    const params: o.Expression[] = [o.literal(index), ref];
+    const params: o.Expression[] = [o.literal(index), this.addToConsts(ref)];
     if (id > 0) {
       // do not push 3rd argument (sub-block id)
       // into i18nStart call for top level i18n context
@@ -455,13 +499,51 @@ export class TemplateDefinitionBuilder implements t.Visitor<void>, LocalResolver
       bindings.forEach(binding => {
         chainBindings.push({sourceSpan: span, value: () => this.convertPropertyBinding(binding)});
       });
-      this.updateInstructionChain(R3.i18nExp, chainBindings);
+      // for i18n block, advance to the most recent element index (by taking the current number of
+      // elements and subtracting one) before invoking `i18nExp` instructions, to make sure the
+      // necessary lifecycle hooks of components/directives are properly flushed.
+      this.updateInstructionChainWithAdvance(this.getConstCount() - 1, R3.i18nExp, chainBindings);
       this.updateInstruction(span, R3.i18nApply, [o.literal(index)]);
     }
     if (!selfClosing) {
       this.creationInstruction(span, R3.i18nEnd);
     }
     this.i18n = null;  // reset local i18n context
+  }
+
+  private i18nAttributesInstruction(
+      nodeIndex: number, attrs: t.BoundAttribute[], sourceSpan: ParseSourceSpan): void {
+    let hasBindings: boolean = false;
+    const i18nAttrArgs: o.Expression[] = [];
+    const bindings: ChainableBindingInstruction[] = [];
+    attrs.forEach(attr => {
+      const message = attr.i18n! as i18n.Message;
+      const converted = attr.value.visit(this._valueConverter);
+      this.allocateBindingSlots(converted);
+      if (converted instanceof Interpolation) {
+        const placeholders = assembleBoundTextPlaceholders(message);
+        const params = placeholdersToParams(placeholders);
+        i18nAttrArgs.push(o.literal(attr.name), this.i18nTranslate(message, params));
+        converted.expressions.forEach(expression => {
+          hasBindings = true;
+          bindings.push({
+            sourceSpan,
+            value: () => this.convertPropertyBinding(expression),
+          });
+        });
+      }
+    });
+    if (bindings.length > 0) {
+      this.updateInstructionChainWithAdvance(nodeIndex, R3.i18nExp, bindings);
+    }
+    if (i18nAttrArgs.length > 0) {
+      const index: o.Expression = o.literal(this.allocateDataSlot());
+      const constIndex = this.addToConsts(o.literalArr(i18nAttrArgs));
+      this.creationInstruction(sourceSpan, R3.i18nAttributes, [index, constIndex]);
+      if (hasBindings) {
+        this.updateInstruction(sourceSpan, R3.i18nApply, [index]);
+      }
+    }
   }
 
   private getNamespaceInstruction(namespaceKey: string|null) {
@@ -477,7 +559,7 @@ export class TemplateDefinitionBuilder implements t.Visitor<void>, LocalResolver
 
   private addNamespaceInstruction(nsInstruction: o.ExternalReference, element: t.Element) {
     this._namespace = nsInstruction;
-    this.creationInstruction(element.sourceSpan, nsInstruction);
+    this.creationInstruction(element.startSourceSpan, nsInstruction);
   }
 
   /**
@@ -496,24 +578,13 @@ export class TemplateDefinitionBuilder implements t.Visitor<void>, LocalResolver
     const slot = this.allocateDataSlot();
     const projectionSlotIdx = this._ngContentSelectorsOffset + this._ngContentReservedSlots.length;
     const parameters: o.Expression[] = [o.literal(slot)];
-    const attributes: o.Expression[] = [];
-    let ngProjectAsAttr: t.TextAttribute|undefined;
 
     this._ngContentReservedSlots.push(ngContent.selector);
 
-    ngContent.attributes.forEach((attribute) => {
-      const {name, value} = attribute;
-      if (name === NG_PROJECT_AS_ATTR_NAME) {
-        ngProjectAsAttr = attribute;
-      }
-      if (name.toLowerCase() !== NG_CONTENT_SELECT_ATTR) {
-        attributes.push(o.literal(name), o.literal(value));
-      }
-    });
-
-    if (ngProjectAsAttr) {
-      attributes.push(...getNgProjectAsLiteral(ngProjectAsAttr));
-    }
+    const nonContentSelectAttributes =
+        ngContent.attributes.filter(attr => attr.name.toLowerCase() !== NG_CONTENT_SELECT_ATTR);
+    const attributes =
+        this.getAttributeExpressions(ngContent.name, nonContentSelectAttributes, [], []);
 
     if (attributes.length > 0) {
       parameters.push(o.literal(projectionSlotIdx), o.literalArr(attributes));
@@ -523,26 +594,19 @@ export class TemplateDefinitionBuilder implements t.Visitor<void>, LocalResolver
 
     this.creationInstruction(ngContent.sourceSpan, R3.projection, parameters);
     if (this.i18n) {
-      this.i18n.appendProjection(ngContent.i18n !, slot);
+      this.i18n.appendProjection(ngContent.i18n!, slot);
     }
   }
 
   visitElement(element: t.Element) {
     const elementIndex = this.allocateDataSlot();
-    const stylingBuilder = new StylingBuilder(o.literal(elementIndex), null);
+    const stylingBuilder = new StylingBuilder(null);
 
     let isNonBindableMode: boolean = false;
     const isI18nRootElement: boolean =
         isI18nRootNode(element.i18n) && !isSingleI18nIcu(element.i18n);
 
-    if (isI18nRootElement && this.i18n) {
-      throw new Error(`Could not mark an element as translatable inside of a translatable section`);
-    }
-
-    const i18nAttrs: (t.TextAttribute | t.BoundAttribute)[] = [];
     const outputAttrs: t.TextAttribute[] = [];
-    let ngProjectAsAttr: t.TextAttribute|undefined;
-
     const [namespaceKey, elementName] = splitNsName(element.name);
     const isNgContainer = checkIsNgContainer(element.name);
 
@@ -556,18 +620,7 @@ export class TemplateDefinitionBuilder implements t.Visitor<void>, LocalResolver
       } else if (name === 'class') {
         stylingBuilder.registerClassAttr(value);
       } else {
-        if (attr.name === NG_PROJECT_AS_ATTR_NAME) {
-          ngProjectAsAttr = attr;
-        }
-        if (attr.i18n) {
-          // Place attributes into a separate array for i18n processing, but also keep such
-          // attributes in the main list to make them available for directive matching at runtime.
-          // TODO(FW-1248): prevent attributes duplication in `i18nAttributes` and `elementStart`
-          // arguments
-          i18nAttrs.push(attr);
-        } else {
-          outputAttrs.push(attr);
-        }
+        outputAttrs.push(attr);
       }
     }
 
@@ -581,35 +634,29 @@ export class TemplateDefinitionBuilder implements t.Visitor<void>, LocalResolver
     }
 
     // Add the attributes
-    const attributes: o.Expression[] = [];
     const allOtherInputs: t.BoundAttribute[] = [];
+    const boundI18nAttrs: t.BoundAttribute[] = [];
 
-    element.inputs.forEach((input: t.BoundAttribute) => {
+    element.inputs.forEach(input => {
       const stylingInputWasSet = stylingBuilder.registerBoundInput(input);
       if (!stylingInputWasSet) {
         if (input.type === BindingType.Property && input.i18n) {
-          // Place attributes into a separate array for i18n processing, but also keep such
-          // attributes in the main list to make them available for directive matching at runtime.
-          // TODO(FW-1248): prevent attributes duplication in `i18nAttributes` and `elementStart`
-          // arguments
-          i18nAttrs.push(input);
+          boundI18nAttrs.push(input);
         } else {
           allOtherInputs.push(input);
         }
       }
     });
 
-    outputAttrs.forEach(attr => {
-      attributes.push(...getAttributeNameLiterals(attr.name), o.literal(attr.value));
-    });
-
     // add attributes for directive and projection matching purposes
-    attributes.push(...this.prepareNonRenderAttrs(
-        allOtherInputs, element.outputs, stylingBuilder, [], i18nAttrs, ngProjectAsAttr));
-    parameters.push(this.addConstants(attributes));
+    const attributes: o.Expression[] = this.getAttributeExpressions(
+        element.name, outputAttrs, allOtherInputs, element.outputs, stylingBuilder, [],
+        boundI18nAttrs);
+    parameters.push(this.addAttrsToConsts(attributes));
 
     // local refs (ex.: <div #foo #bar="baz">)
-    parameters.push(this.prepareRefsParameter(element.references));
+    const refs = this.prepareRefsArray(element.references);
+    parameters.push(this.addToConsts(refs));
 
     const wasInNamespace = this._namespace;
     const currentNamespace = this.getNamespaceInstruction(namespaceKey);
@@ -621,7 +668,7 @@ export class TemplateDefinitionBuilder implements t.Visitor<void>, LocalResolver
     }
 
     if (this.i18n) {
-      this.i18n.appendElement(element.i18n !, elementIndex);
+      this.i18n.appendElement(element.i18n!, elementIndex);
     }
 
     // Note that we do not append text node instructions and ICUs inside i18n section,
@@ -630,7 +677,7 @@ export class TemplateDefinitionBuilder implements t.Visitor<void>, LocalResolver
                                                             element.children.length > 0;
 
     const createSelfClosingInstruction = !stylingBuilder.hasBindingsWithPipes &&
-        element.outputs.length === 0 && i18nAttrs.length === 0 && !hasChildren;
+        element.outputs.length === 0 && boundI18nAttrs.length === 0 && !hasChildren;
     const createSelfClosingI18nInstruction =
         !createSelfClosingInstruction && hasTextChildrenOnly(element.children);
 
@@ -640,76 +687,44 @@ export class TemplateDefinitionBuilder implements t.Visitor<void>, LocalResolver
           trimTrailingNulls(parameters));
     } else {
       this.creationInstruction(
-          element.sourceSpan, isNgContainer ? R3.elementContainerStart : R3.elementStart,
+          element.startSourceSpan, isNgContainer ? R3.elementContainerStart : R3.elementStart,
           trimTrailingNulls(parameters));
 
       if (isNonBindableMode) {
-        this.creationInstruction(element.sourceSpan, R3.disableBindings);
+        this.creationInstruction(element.startSourceSpan, R3.disableBindings);
       }
 
-      // process i18n element attributes
-      if (i18nAttrs.length) {
-        let hasBindings: boolean = false;
-        const i18nAttrArgs: o.Expression[] = [];
-        const bindings: ChainableBindingInstruction[] = [];
-        i18nAttrs.forEach(attr => {
-          const message = attr.i18n !as i18n.Message;
-          if (attr instanceof t.TextAttribute) {
-            i18nAttrArgs.push(o.literal(attr.name), this.i18nTranslate(message));
-          } else {
-            const converted = attr.value.visit(this._valueConverter);
-            this.allocateBindingSlots(converted);
-            if (converted instanceof Interpolation) {
-              const placeholders = assembleBoundTextPlaceholders(message);
-              const params = placeholdersToParams(placeholders);
-              i18nAttrArgs.push(o.literal(attr.name), this.i18nTranslate(message, params));
-              converted.expressions.forEach(expression => {
-                hasBindings = true;
-                bindings.push({
-                  sourceSpan: element.sourceSpan,
-                  value: () => this.convertPropertyBinding(expression)
-                });
-              });
-            }
-          }
-        });
-        if (bindings.length) {
-          this.updateInstructionChain(R3.i18nExp, bindings);
-        }
-        if (i18nAttrArgs.length) {
-          const index: o.Expression = o.literal(this.allocateDataSlot());
-          const args = this.constantPool.getConstLiteral(o.literalArr(i18nAttrArgs), true);
-          this.creationInstruction(element.sourceSpan, R3.i18nAttributes, [index, args]);
-          if (hasBindings) {
-            this.updateInstruction(element.sourceSpan, R3.i18nApply, [index]);
-          }
-        }
+      if (boundI18nAttrs.length > 0) {
+        this.i18nAttributesInstruction(
+            elementIndex, boundI18nAttrs, element.startSourceSpan ?? element.sourceSpan);
       }
 
       // Generate Listeners (outputs)
-      element.outputs.forEach((outputAst: t.BoundEvent) => {
-        this.creationInstruction(
-            outputAst.sourceSpan, R3.listener,
-            this.prepareListenerParameter(element.name, outputAst, elementIndex));
-      });
+      if (element.outputs.length > 0) {
+        const listeners = element.outputs.map(
+            (outputAst: t.BoundEvent) => ({
+              sourceSpan: outputAst.sourceSpan,
+              params: this.prepareListenerParameter(element.name, outputAst, elementIndex)
+            }));
+        this.creationInstructionChain(R3.listener, listeners);
+      }
 
       // Note: it's important to keep i18n/i18nStart instructions after i18nAttributes and
       // listeners, to make sure i18nAttributes instruction targets current element at runtime.
       if (isI18nRootElement) {
-        this.i18nStart(element.sourceSpan, element.i18n !, createSelfClosingI18nInstruction);
+        this.i18nStart(element.startSourceSpan, element.i18n!, createSelfClosingI18nInstruction);
       }
     }
 
     // the code here will collect all update-level styling instructions and add them to the
     // update block of the template function AOT code. Instructions like `styleProp`,
-    // `styleMap`, `classMap`, `classProp` and `stylingApply`
+    // `styleMap`, `classMap`, `classProp`
     // are all generated and assigned in the code below.
     const stylingInstructions = stylingBuilder.buildUpdateLevelInstructions(this._valueConverter);
     const limit = stylingInstructions.length - 1;
     for (let i = 0; i <= limit; i++) {
       const instruction = stylingInstructions[i];
-      this._bindingSlots += instruction.allocateBindingSlots;
-      this.processStylingInstruction(elementIndex, instruction, false);
+      this._bindingSlots += this.processStylingUpdateInstruction(elementIndex, instruction);
     }
 
     // the reason why `undefined` is used is because the renderer understands this as a
@@ -720,7 +735,7 @@ export class TemplateDefinitionBuilder implements t.Visitor<void>, LocalResolver
     const attributeBindings: ChainableBindingInstruction[] = [];
 
     // Generate element input bindings
-    allOtherInputs.forEach((input: t.BoundAttribute) => {
+    allOtherInputs.forEach(input => {
       const inputType = input.type;
       if (inputType === BindingType.Animation) {
         const value = input.value.visit(this._valueConverter);
@@ -778,7 +793,8 @@ export class TemplateDefinitionBuilder implements t.Visitor<void>, LocalResolver
               propertyBindings.push({
                 name: attrName,
                 sourceSpan: input.sourceSpan,
-                value: () => this.convertPropertyBinding(value), params
+                value: () => this.convertPropertyBinding(value),
+                params
               });
             }
           } else if (inputType === BindingType.Attribute) {
@@ -794,7 +810,8 @@ export class TemplateDefinitionBuilder implements t.Visitor<void>, LocalResolver
               attributeBindings.push({
                 name: attrName,
                 sourceSpan: input.sourceSpan,
-                value: () => this.convertPropertyBinding(boundValue), params
+                value: () => this.convertPropertyBinding(boundValue),
+                params
               });
             }
           } else {
@@ -822,12 +839,12 @@ export class TemplateDefinitionBuilder implements t.Visitor<void>, LocalResolver
     t.visitAll(this, element.children);
 
     if (!isI18nRootElement && this.i18n) {
-      this.i18n.appendElement(element.i18n !, elementIndex, true);
+      this.i18n.appendElement(element.i18n!, elementIndex, true);
     }
 
     if (!createSelfClosingInstruction) {
       // Finish element construction mode.
-      const span = element.endSourceSpan || element.sourceSpan;
+      const span = element.endSourceSpan ?? element.sourceSpan;
       if (isI18nRootElement) {
         this.i18nEnd(span, createSelfClosingI18nInstruction);
       }
@@ -844,7 +861,7 @@ export class TemplateDefinitionBuilder implements t.Visitor<void>, LocalResolver
     const templateIndex = this.allocateDataSlot();
 
     if (this.i18n) {
-      this.i18n.appendTemplate(template.i18n !, templateIndex);
+      this.i18n.appendTemplate(template.i18n!, templateIndex);
     }
 
     const tagName = sanitizeIdentifier(template.tagName || '');
@@ -864,16 +881,15 @@ export class TemplateDefinitionBuilder implements t.Visitor<void>, LocalResolver
     this.matchDirectives(NG_TEMPLATE_TAG_NAME, template);
 
     // prepare attributes parameter (including attributes used for directive matching)
-    const attrsExprs: o.Expression[] = [];
-    template.attributes.forEach(
-        (a: t.TextAttribute) => { attrsExprs.push(asLiteral(a.name), asLiteral(a.value)); });
-    attrsExprs.push(...this.prepareNonRenderAttrs(
-        template.inputs, template.outputs, undefined, template.templateAttrs));
-    parameters.push(this.addConstants(attrsExprs));
+    const attrsExprs: o.Expression[] = this.getAttributeExpressions(
+        NG_TEMPLATE_TAG_NAME, template.attributes, template.inputs, template.outputs,
+        undefined /* styles */, template.templateAttrs);
+    parameters.push(this.addAttrsToConsts(attrsExprs));
 
     // local refs (ex.: <ng-template #foo>)
     if (template.references && template.references.length) {
-      parameters.push(this.prepareRefsParameter(template.references));
+      const refs = this.prepareRefsArray(template.references);
+      parameters.push(this.addToConsts(refs));
       parameters.push(o.importExpr(R3.templateRefExtractor));
     }
 
@@ -892,7 +908,7 @@ export class TemplateDefinitionBuilder implements t.Visitor<void>, LocalResolver
       const templateFunctionExpr = templateVisitor.buildTemplateFunction(
           template.children, template.variables,
           this._ngContentReservedSlots.length + this._ngContentSelectorsOffset, template.i18n);
-      this.constantPool.statements.push(templateFunctionExpr.toDeclStmt(templateName, null));
+      this.constantPool.statements.push(templateFunctionExpr.toDeclStmt(templateName));
       if (templateVisitor._ngContentReservedSlots.length) {
         this._ngContentReservedSlots.push(...templateVisitor._ngContentReservedSlots);
       }
@@ -909,16 +925,34 @@ export class TemplateDefinitionBuilder implements t.Visitor<void>, LocalResolver
     // handle property bindings e.g. ɵɵproperty('ngForOf', ctx.items), et al;
     this.templatePropertyBindings(templateIndex, template.templateAttrs);
 
-    // Only add normal input/output binding instructions on explicit ng-template elements.
+    // Only add normal input/output binding instructions on explicit <ng-template> elements.
     if (template.tagName === NG_TEMPLATE_TAG_NAME) {
+      const [i18nInputs, inputs] =
+          partitionArray<t.BoundAttribute, t.BoundAttribute>(template.inputs, hasI18nMeta);
+
+      // Add i18n attributes that may act as inputs to directives. If such attributes are present,
+      // generate `i18nAttributes` instruction. Note: we generate it only for explicit <ng-template>
+      // elements, in case of inline templates, corresponding instructions will be generated in the
+      // nested template function.
+      if (i18nInputs.length > 0) {
+        this.i18nAttributesInstruction(
+            templateIndex, i18nInputs, template.startSourceSpan ?? template.sourceSpan);
+      }
+
       // Add the input bindings
-      this.templatePropertyBindings(templateIndex, template.inputs);
+      if (inputs.length > 0) {
+        this.templatePropertyBindings(templateIndex, inputs);
+      }
+
       // Generate listeners for directive output
-      template.outputs.forEach((outputAst: t.BoundEvent) => {
-        this.creationInstruction(
-            outputAst.sourceSpan, R3.listener,
-            this.prepareListenerParameter('ng_template', outputAst, templateIndex));
-      });
+      if (template.outputs.length > 0) {
+        const listeners = template.outputs.map(
+            (outputAst: t.BoundEvent) => ({
+              sourceSpan: outputAst.sourceSpan,
+              params: this.prepareListenerParameter('ng_template', outputAst, templateIndex)
+            }));
+        this.creationInstructionChain(R3.listener, listeners);
+      }
     }
   }
 
@@ -934,7 +968,7 @@ export class TemplateDefinitionBuilder implements t.Visitor<void>, LocalResolver
       const value = text.value.visit(this._valueConverter);
       this.allocateBindingSlots(value);
       if (value instanceof Interpolation) {
-        this.i18n.appendBoundText(text.i18n !);
+        this.i18n.appendBoundText(text.i18n!);
         this.i18nAppendBindings(value.expressions);
       }
       return;
@@ -974,15 +1008,15 @@ export class TemplateDefinitionBuilder implements t.Visitor<void>, LocalResolver
     // to generate i18n context and the necessary instructions
     if (!this.i18n) {
       initWasInvoked = true;
-      this.i18nStart(null, icu.i18n !, true);
+      this.i18nStart(null, icu.i18n!, true);
     }
 
-    const i18n = this.i18n !;
+    const i18n = this.i18n!;
     const vars = this.i18nBindProps(icu.vars);
     const placeholders = this.i18nBindProps(icu.placeholders);
 
     // output ICU directly and keep ICU reference in context
-    const message = icu.i18n !as i18n.Message;
+    const message = icu.i18n! as i18n.Message;
 
     // we always need post-processing function for ICUs, to make sure that:
     // - all placeholders in a form of {PLACEHOLDER} are replaced with actual values (note:
@@ -1015,13 +1049,21 @@ export class TemplateDefinitionBuilder implements t.Visitor<void>, LocalResolver
     return null;
   }
 
-  private allocateDataSlot() { return this._dataIndex++; }
+  private allocateDataSlot() {
+    return this._dataIndex++;
+  }
 
-  getConstCount() { return this._dataIndex; }
+  getConstCount() {
+    return this._dataIndex;
+  }
 
-  getVarCount() { return this._pureFunctionSlots; }
+  getVarCount() {
+    return this._pureFunctionSlots;
+  }
 
-  getConsts() { return this._constants; }
+  getConsts(): ComponentDefConsts {
+    return this._constants;
+  }
 
   getNgContentSelectors(): o.Expression|null {
     return this._ngContentReservedSlots.length ?
@@ -1029,7 +1071,9 @@ export class TemplateDefinitionBuilder implements t.Visitor<void>, LocalResolver
         null;
   }
 
-  private bindingContext() { return `${this._bindingContext++}`; }
+  private bindingContext() {
+    return `${this._bindingContext++}`;
+  }
 
   private templatePropertyBindings(
       templateIndex: number, attrs: (t.BoundAttribute|t.TextAttribute)[]) {
@@ -1040,11 +1084,24 @@ export class TemplateDefinitionBuilder implements t.Visitor<void>, LocalResolver
 
         if (value !== undefined) {
           this.allocateBindingSlots(value);
-          propertyBindings.push({
-            name: input.name,
-            sourceSpan: input.sourceSpan,
-            value: () => this.convertPropertyBinding(value)
-          });
+          if (value instanceof Interpolation) {
+            // Params typically contain attribute namespace and value sanitizer, which is applicable
+            // for regular HTML elements, but not applicable for <ng-template> (since props act as
+            // inputs to directives), so keep params array empty.
+            const params: any[] = [];
+
+            // prop="{{value}}" case
+            this.interpolatedUpdateInstruction(
+                getPropertyInterpolationExpression(value), templateIndex, input.name, input, value,
+                params);
+          } else {
+            // [prop]="value" case
+            propertyBindings.push({
+              name: input.name,
+              sourceSpan: input.sourceSpan,
+              value: () => this.convertPropertyBinding(value)
+            });
+          }
         }
       }
     });
@@ -1067,31 +1124,45 @@ export class TemplateDefinitionBuilder implements t.Visitor<void>, LocalResolver
     });
   }
 
-  private processStylingInstruction(
-      elementIndex: number, instruction: StylingInstruction|null, createMode: boolean) {
+  private processStylingUpdateInstruction(
+      elementIndex: number, instruction: StylingInstruction|null) {
+    let allocateBindingSlots = 0;
     if (instruction) {
-      if (createMode) {
-        this.creationInstruction(instruction.sourceSpan, instruction.reference, () => {
-          return instruction.params(value => this.convertPropertyBinding(value)) as o.Expression[];
+      const calls: ChainableBindingInstruction[] = [];
+
+      instruction.calls.forEach(call => {
+        allocateBindingSlots += call.allocateBindingSlots;
+        calls.push({
+          sourceSpan: call.sourceSpan,
+          value: () => {
+            return call.params(
+                       value => (call.supportsInterpolation && value instanceof Interpolation) ?
+                           this.getUpdateInstructionArguments(value) :
+                           this.convertPropertyBinding(value)) as o.Expression[];
+          }
         });
-      } else {
-        this.updateInstructionWithAdvance(
-            elementIndex, instruction.sourceSpan, instruction.reference, () => {
-              return instruction
-                  .params(value => {
-                    return (instruction.supportsInterpolation && value instanceof Interpolation) ?
-                        this.getUpdateInstructionArguments(value) :
-                        this.convertPropertyBinding(value);
-                  }) as o.Expression[];
-            });
-      }
+      });
+
+      this.updateInstructionChainWithAdvance(elementIndex, instruction.reference, calls);
     }
+
+    return allocateBindingSlots;
   }
 
   private creationInstruction(
       span: ParseSourceSpan|null, reference: o.ExternalReference,
       paramsOrFn?: o.Expression[]|(() => o.Expression[]), prepend?: boolean) {
     this.instructionFn(this._creationCodeFns, span, reference, paramsOrFn || [], prepend);
+  }
+
+  private creationInstructionChain(reference: o.ExternalReference, calls: {
+    sourceSpan: ParseSourceSpan|null,
+    params: () => o.Expression[]
+  }[]) {
+    const span = calls.length ? calls[0].sourceSpan : null;
+    this._creationCodeFns.push(() => {
+      return chainedInstruction(reference, calls.map(call => call.params()), span).toStmt();
+    });
   }
 
   private updateInstructionWithAdvance(
@@ -1113,8 +1184,13 @@ export class TemplateDefinitionBuilder implements t.Visitor<void>, LocalResolver
 
     this._updateCodeFns.push(() => {
       const calls = bindings.map(property => {
-        const fnParams = [property.value(), ...(property.params || [])];
+        const value = property.value();
+        const fnParams = Array.isArray(value) ? value : [value];
+        if (property.params) {
+          fnParams.push(...property.params);
+        }
         if (property.name) {
+          // We want the property name to always be the first function parameter.
           fnParams.unshift(o.literal(property.name));
         }
         return fnParams;
@@ -1170,7 +1246,7 @@ export class TemplateDefinitionBuilder implements t.Visitor<void>, LocalResolver
 
   private convertPropertyBinding(value: AST): o.Expression {
     const convertedPropertyBinding = convertPropertyBinding(
-        this, this.getImplicitReceiverExpr(), value, this.bindingContext(), BindingForm.TrySimple,
+        this, this.getImplicitReceiverExpr(), value, this.bindingContext(), BindingForm.Expression,
         () => error('Unexpected interpolation'));
     const valExpr = convertedPropertyBinding.currValExpr;
     this._tempVariables.push(...convertedPropertyBinding.stmts);
@@ -1191,11 +1267,12 @@ export class TemplateDefinitionBuilder implements t.Visitor<void>, LocalResolver
     return args;
   }
 
-  private matchDirectives(tagName: string, elOrTpl: t.Element|t.Template) {
+  private matchDirectives(elementName: string, elOrTpl: t.Element|t.Template) {
     if (this.directiveMatcher) {
-      const selector = createCssSelector(tagName, getAttrsForDirectiveMatching(elOrTpl));
-      this.directiveMatcher.match(
-          selector, (cssSelector, staticType) => { this.directives.add(staticType); });
+      const selector = createCssSelector(elementName, getAttrsForDirectiveMatching(elOrTpl));
+      this.directiveMatcher.match(selector, (cssSelector, staticType) => {
+        this.directives.add(staticType);
+      });
     }
   }
 
@@ -1211,26 +1288,61 @@ export class TemplateDefinitionBuilder implements t.Visitor<void>, LocalResolver
    *
    * ```
    * attrs = [prop, value, prop2, value2,
+   *   PROJECT_AS, selector,
    *   CLASSES, class1, class2,
    *   STYLES, style1, value1, style2, value2,
    *   BINDINGS, name1, name2, name3,
    *   TEMPLATE, name4, name5, name6,
-   *   PROJECT_AS, selector,
    *   I18N, name7, name8, ...]
    * ```
    *
    * Note that this function will fully ignore all synthetic (@foo) attribute values
    * because those values are intended to always be generated as property instructions.
    */
-  private prepareNonRenderAttrs(
-      inputs: t.BoundAttribute[], outputs: t.BoundEvent[], styles?: StylingBuilder,
+  private getAttributeExpressions(
+      elementName: string, renderAttributes: t.TextAttribute[], inputs: t.BoundAttribute[],
+      outputs: t.BoundEvent[], styles?: StylingBuilder,
       templateAttrs: (t.BoundAttribute|t.TextAttribute)[] = [],
-      i18nAttrs: (t.BoundAttribute|t.TextAttribute)[] = [],
-      ngProjectAsAttr?: t.TextAttribute): o.Expression[] {
+      boundI18nAttrs: t.BoundAttribute[] = []): o.Expression[] {
     const alreadySeen = new Set<string>();
     const attrExprs: o.Expression[] = [];
+    let ngProjectAsAttr: t.TextAttribute|undefined;
 
-    function addAttrExpr(key: string | number, value?: o.Expression): void {
+    for (const attr of renderAttributes) {
+      if (attr.name === NG_PROJECT_AS_ATTR_NAME) {
+        ngProjectAsAttr = attr;
+      }
+
+      // Note that static i18n attributes aren't in the i18n array,
+      // because they're treated in the same way as regular attributes.
+      if (attr.i18n) {
+        // When i18n attributes are present on elements with structural directives
+        // (e.g. `<div *ngIf title="Hello" i18n-title>`), we want to avoid generating
+        // duplicate i18n translation blocks for `ɵɵtemplate` and `ɵɵelement` instruction
+        // attributes. So we do a cache lookup to see if suitable i18n translation block
+        // already exists.
+        const {i18nVarRefsCache} = this._constants;
+        let i18nVarRef: o.ReadVarExpr;
+        if (i18nVarRefsCache.has(attr.i18n)) {
+          i18nVarRef = i18nVarRefsCache.get(attr.i18n)!;
+        } else {
+          i18nVarRef = this.i18nTranslate(attr.i18n as i18n.Message);
+          i18nVarRefsCache.set(attr.i18n, i18nVarRef);
+        }
+        attrExprs.push(o.literal(attr.name), i18nVarRef);
+      } else {
+        attrExprs.push(
+            ...getAttributeNameLiterals(attr.name), trustedConstAttribute(elementName, attr));
+      }
+    }
+
+    // Keep ngProjectAs next to the other name, value pairs so we can verify that we match
+    // ngProjectAs marker in the attribute name slot.
+    if (ngProjectAsAttr) {
+      attrExprs.push(...getNgProjectAsLiteral(ngProjectAsAttr));
+    }
+
+    function addAttrExpr(key: string|number, value?: o.Expression): void {
       if (typeof key === 'string') {
         if (!alreadySeen.has(key)) {
           attrExprs.push(...getAttributeNameLiterals(key));
@@ -1282,36 +1394,36 @@ export class TemplateDefinitionBuilder implements t.Visitor<void>, LocalResolver
       templateAttrs.forEach(attr => addAttrExpr(attr.name));
     }
 
-    if (ngProjectAsAttr) {
-      attrExprs.push(...getNgProjectAsLiteral(ngProjectAsAttr));
-    }
-
-    if (i18nAttrs.length) {
+    if (boundI18nAttrs.length) {
       attrExprs.push(o.literal(core.AttributeMarker.I18n));
-      i18nAttrs.forEach(attr => addAttrExpr(attr.name));
+      boundI18nAttrs.forEach(attr => addAttrExpr(attr.name));
     }
 
     return attrExprs;
   }
 
-  private addConstants(constExprs: o.Expression[]): o.LiteralExpr {
-    if (constExprs.length > 0) {
-      const literal = o.literalArr(constExprs);
-
-      // Try to reuse a literal that's already in the array, if possible.
-      for (let i = 0; i < this._constants.length; i++) {
-        if (this._constants[i].isEquivalent(literal)) {
-          return o.literal(i);
-        }
-      }
-
-      return o.literal(this._constants.push(literal) - 1);
+  private addToConsts(expression: o.Expression): o.LiteralExpr {
+    if (o.isNull(expression)) {
+      return o.TYPED_NULL_EXPR;
     }
 
-    return o.TYPED_NULL_EXPR;
+    const consts = this._constants.constExpressions;
+
+    // Try to reuse a literal that's already in the array, if possible.
+    for (let i = 0; i < consts.length; i++) {
+      if (consts[i].isEquivalent(expression)) {
+        return o.literal(i);
+      }
+    }
+
+    return o.literal(consts.push(expression) - 1);
   }
 
-  private prepareRefsParameter(references: t.Reference[]): o.Expression {
+  private addAttrsToConsts(attrs: o.Expression[]): o.LiteralExpr {
+    return attrs.length > 0 ? this.addToConsts(o.literalArr(attrs)) : o.TYPED_NULL_EXPR;
+  }
+
+  private prepareRefsArray(references: t.Reference[]): o.Expression {
     if (!references || references.length === 0) {
       return o.TYPED_NULL_EXPR;
     }
@@ -1336,7 +1448,7 @@ export class TemplateDefinitionBuilder implements t.Visitor<void>, LocalResolver
       return [reference.name, reference.value];
     }));
 
-    return this.constantPool.getConstLiteral(asLiteral(refsParam), true);
+    return asLiteral(refsParam);
   }
 
   private prepareListenerParameter(tagName: string, outputAst: t.BoundEvent, index: number):
@@ -1345,10 +1457,11 @@ export class TemplateDefinitionBuilder implements t.Visitor<void>, LocalResolver
       const eventName: string = outputAst.name;
       const bindingFnName = outputAst.type === ParsedEventType.Animation ?
           // synthetic @listener.foo values are treated the exact same as are standard listeners
-          prepareSyntheticListenerFunctionName(eventName, outputAst.phase !) :
+          prepareSyntheticListenerFunctionName(eventName, outputAst.phase!) :
           sanitizeIdentifier(eventName);
       const handlerName = `${this.templateName}_${tagName}_${bindingFnName}_${index}_listener`;
-      const scope = this._bindingScope.nestedScope(this._bindingScope.bindingLevel);
+      const scope = this._bindingScope.nestedScope(
+          this._bindingScope.bindingLevel, EVENT_BINDING_SCOPE_GLOBALS);
       return prepareEventListenerParameters(outputAst, handlerName, scope);
     };
   }
@@ -1373,7 +1486,7 @@ export class ValueConverter extends AstMemoryEfficientTransformer {
     // Allocate one slot for the result plus one slot per pipe argument
     const pureFunctionSlot = this.allocatePureFunctionSlots(2 + pipe.args.length);
     const target = new PropertyRead(
-        pipe.span, pipe.sourceSpan, new ImplicitReceiver(pipe.span, pipe.sourceSpan),
+        pipe.span, pipe.sourceSpan, pipe.nameSpan, new ImplicitReceiver(pipe.span, pipe.sourceSpan),
         slotPseudoLocal);
     const {identifier, isVarLength} = pipeBindingCallInfo(pipe.args);
     this.definePipe(pipe.name, slotPseudoLocal, slot, o.importExpr(identifier));
@@ -1404,11 +1517,9 @@ export class ValueConverter extends AstMemoryEfficientTransformer {
         array.span, array.sourceSpan, this.visitAll(array.expressions), values => {
           // If the literal has calculated (non-literal) elements transform it into
           // calls to literal factories that compose the literal and will cache intermediate
-          // values. Otherwise, just return an literal array that contains the values.
+          // values.
           const literal = o.literalArr(values);
-          return values.every(a => a.isConstant()) ?
-              this.constantPool.getConstLiteral(literal, true) :
-              getLiteralFactory(this.constantPool, literal, this.allocatePureFunctionSlots);
+          return getLiteralFactory(this.constantPool, literal, this.allocatePureFunctionSlots);
         });
   }
 
@@ -1416,12 +1527,10 @@ export class ValueConverter extends AstMemoryEfficientTransformer {
     return new BuiltinFunctionCall(map.span, map.sourceSpan, this.visitAll(map.values), values => {
       // If the literal has calculated (non-literal) elements  transform it into
       // calls to literal factories that compose the literal and will cache intermediate
-      // values. Otherwise, just return an literal array that contains the values.
+      // values.
       const literal = o.literalMap(values.map(
           (value, index) => ({key: map.keys[index].key, value, quoted: map.keys[index].quoted})));
-      return values.every(a => a.isConstant()) ?
-          this.constantPool.getConstLiteral(literal, true) :
-          getLiteralFactory(this.constantPool, literal, this.allocatePureFunctionSlots);
+      return getLiteralFactory(this.constantPool, literal, this.allocatePureFunctionSlots);
     });
   }
 }
@@ -1451,7 +1560,7 @@ function pureFunctionCallInfo(args: o.Expression[]) {
 }
 
 function instruction(
-    span: ParseSourceSpan | null, reference: o.ExternalReference,
+    span: ParseSourceSpan|null, reference: o.ExternalReference,
     params: o.Expression[]): o.Expression {
   return o.importExpr(reference, null, span).callFn(params, span);
 }
@@ -1463,20 +1572,16 @@ function generateNextContextExpr(relativeLevelDiff: number): o.Expression {
 }
 
 function getLiteralFactory(
-    constantPool: ConstantPool, literal: o.LiteralArrayExpr | o.LiteralMapExpr,
+    constantPool: ConstantPool, literal: o.LiteralArrayExpr|o.LiteralMapExpr,
     allocateSlots: (numSlots: number) => number): o.Expression {
   const {literalFactory, literalFactoryArguments} = constantPool.getLiteralFactory(literal);
   // Allocate 1 slot for the result plus 1 per argument
   const startSlot = allocateSlots(1 + literalFactoryArguments.length);
-  literalFactoryArguments.length > 0 || error(`Expected arguments to a literal factory function`);
   const {identifier, isVarLength} = pureFunctionCallInfo(literalFactoryArguments);
 
   // Literal factories are pure functions that only need to be re-invoked when the parameters
   // change.
-  const args = [
-    o.literal(startSlot),
-    literalFactory,
-  ];
+  const args = [o.literal(startSlot), literalFactory];
 
   if (isVarLength) {
     args.push(o.literalArr(literalFactoryArguments));
@@ -1533,9 +1638,8 @@ const SHARED_CONTEXT_KEY = '$$shared_ctx$$';
  * declaration should always come before the local ref declaration.
  */
 type BindingData = {
-  retrievalLevel: number; lhs: o.Expression; declareLocalCallback?: DeclareLocalVarCallback;
-  declare: boolean;
-  priority: number;
+  retrievalLevel: number; lhs: o.Expression;
+  declareLocalCallback?: DeclareLocalVarCallback; declare: boolean; priority: number;
   localRef: boolean;
 };
 
@@ -1543,23 +1647,30 @@ type BindingData = {
  * The sorting priority of a local variable declaration. Higher numbers
  * mean the declaration will appear first in the generated code.
  */
-const enum DeclarationPriority { DEFAULT = 0, CONTEXT = 1, SHARED_CONTEXT = 2 }
+const enum DeclarationPriority {
+  DEFAULT = 0,
+  CONTEXT = 1,
+  SHARED_CONTEXT = 2
+}
 
 export class BindingScope implements LocalResolver {
   /** Keeps a map from local variables to their BindingData. */
   private map = new Map<string, BindingData>();
   private referenceNameIndex = 0;
   private restoreViewVariable: o.ReadVarExpr|null = null;
-  private static _ROOT_SCOPE: BindingScope;
-
-  static get ROOT_SCOPE(): BindingScope {
-    if (!BindingScope._ROOT_SCOPE) {
-      BindingScope._ROOT_SCOPE = new BindingScope().set(0, '$event', o.variable('$event'));
-    }
-    return BindingScope._ROOT_SCOPE;
+  static createRootScope(): BindingScope {
+    return new BindingScope();
   }
 
-  private constructor(public bindingLevel: number = 0, private parent: BindingScope|null = null) {}
+  private constructor(
+      public bindingLevel: number = 0, private parent: BindingScope|null = null,
+      public globals?: Set<string>) {
+    if (globals !== undefined) {
+      for (const name of globals) {
+        this.set(0, name, o.variable(name));
+      }
+    }
+  }
 
   get(name: string): o.Expression|null {
     let current: BindingScope|null = this;
@@ -1632,7 +1743,9 @@ export class BindingScope implements LocalResolver {
   }
 
   // Implemented as part of LocalResolver.
-  getLocal(name: string): (o.Expression|null) { return this.get(name); }
+  getLocal(name: string): (o.Expression|null) {
+    return this.get(name);
+  }
 
   // Implemented as part of LocalResolver.
   notifyImplicitReceiverUse(): void {
@@ -1640,12 +1753,12 @@ export class BindingScope implements LocalResolver {
       // Since the implicit receiver is accessed in an embedded view, we need to
       // ensure that we declare a shared context variable for the current template
       // in the update variables.
-      this.map.get(SHARED_CONTEXT_KEY + 0) !.declare = true;
+      this.map.get(SHARED_CONTEXT_KEY + 0)!.declare = true;
     }
   }
 
-  nestedScope(level: number): BindingScope {
-    const newScope = new BindingScope(level, this);
+  nestedScope(level: number, globals?: Set<string>): BindingScope {
+    const newScope = new BindingScope(level, this, globals);
     if (level > 0) newScope.generateSharedContextVar(0);
     return newScope;
   }
@@ -1661,7 +1774,7 @@ export class BindingScope implements LocalResolver {
       this.generateSharedContextVar(retrievalLevel);
     }
     // Shared context variables are always generated as "ReadVarExpr".
-    return this.map.get(bindingKey) !.lhs as o.ReadVarExpr;
+    return this.map.get(bindingKey)!.lhs as o.ReadVarExpr;
   }
 
   getSharedContextName(retrievalLevel: number): o.ReadVarExpr|null {
@@ -1698,7 +1811,7 @@ export class BindingScope implements LocalResolver {
   }
 
   getComponentProperty(name: string): o.Expression {
-    const componentValue = this.map.get(SHARED_CONTEXT_KEY + 0) !;
+    const componentValue = this.map.get(SHARED_CONTEXT_KEY + 0)!;
     componentValue.declare = true;
     this.maybeRestoreView(0, false);
     return componentValue.lhs.prop(name);
@@ -1711,11 +1824,11 @@ export class BindingScope implements LocalResolver {
     // 2 - we are looking up a local ref, which requires restoring the view where the local
     // ref is stored
     if (this.isListenerScope() && (retrievalLevel < this.bindingLevel || localRefLookup)) {
-      if (!this.parent !.restoreViewVariable) {
+      if (!this.parent!.restoreViewVariable) {
         // parent saves variable to generate a shared `const $s$ = getCurrentView();` instruction
-        this.parent !.restoreViewVariable = o.variable(this.parent !.freshReferenceName());
+        this.parent!.restoreViewVariable = o.variable(this.parent!.freshReferenceName());
       }
-      this.restoreViewVariable = this.parent !.restoreViewVariable;
+      this.restoreViewVariable = this.parent!.restoreViewVariable;
     }
   }
 
@@ -1734,19 +1847,22 @@ export class BindingScope implements LocalResolver {
         [];
   }
 
-  isListenerScope() { return this.parent && this.parent.bindingLevel === this.bindingLevel; }
+  isListenerScope() {
+    return this.parent && this.parent.bindingLevel === this.bindingLevel;
+  }
 
   variableDeclarations(): o.Statement[] {
     let currentContextLevel = 0;
     return Array.from(this.map.values())
-        .filter(value => value.declare)
-        .sort((a, b) => b.retrievalLevel - a.retrievalLevel || b.priority - a.priority)
-        .reduce((stmts: o.Statement[], value: BindingData) => {
-          const levelDiff = this.bindingLevel - value.retrievalLevel;
-          const currStmts = value.declareLocalCallback !(this, levelDiff - currentContextLevel);
-          currentContextLevel = levelDiff;
-          return stmts.concat(currStmts);
-        }, []) as o.Statement[];
+               .filter(value => value.declare)
+               .sort((a, b) => b.retrievalLevel - a.retrievalLevel || b.priority - a.priority)
+               .reduce((stmts: o.Statement[], value: BindingData) => {
+                 const levelDiff = this.bindingLevel - value.retrievalLevel;
+                 const currStmts =
+                     value.declareLocalCallback!(this, levelDiff - currentContextLevel);
+                 currentContextLevel = levelDiff;
+                 return stmts.concat(currStmts);
+               }, []) as o.Statement[];
   }
 
 
@@ -1762,15 +1878,18 @@ export class BindingScope implements LocalResolver {
 /**
  * Creates a `CssSelector` given a tag name and a map of attributes
  */
-function createCssSelector(tag: string, attributes: {[name: string]: string}): CssSelector {
+export function createCssSelector(
+    elementName: string, attributes: {[name: string]: string}): CssSelector {
   const cssSelector = new CssSelector();
+  const elementNameNoNs = splitNsName(elementName)[1];
 
-  cssSelector.setElement(tag);
+  cssSelector.setElement(elementNameNoNs);
 
   Object.getOwnPropertyNames(attributes).forEach((name) => {
+    const nameNoNs = splitNsName(name)[1];
     const value = attributes[name];
 
-    cssSelector.addAttribute(name, value);
+    cssSelector.addAttribute(nameNoNs, value);
     if (name.toLowerCase() === 'class') {
       const classes = value.trim().split(/\s+/);
       classes.forEach(className => cssSelector.addClassName(className));
@@ -1925,17 +2044,28 @@ export interface ParseTemplateOptions {
   leadingTriviaChars?: string[];
 
   /**
-   * Render `$localize` message ids with the specified legacy format (xlf, xlf2 or xmb).
+   * Render `$localize` message ids with additional legacy message ids.
    *
-   * Use this option when use are using the `$localize` based localization messages but
-   * have not migrated the translation files to use the new `$localize` message id format.
+   * This option defaults to `true` but in the future the defaul will be flipped.
    *
-   * @deprecated
-   * `i18nLegacyMessageIdFormat` should only be used while migrating from legacy message id
-   * formatted translation files and will be removed at the same time as ViewEngine support is
-   * removed.
+   * For now set this option to false if you have migrated the translation files to use the new
+   * `$localize` message id format and you are not using compile time translation merging.
    */
-  i18nLegacyMessageIdFormat?: string;
+  enableI18nLegacyMessageIdFormat?: boolean;
+  /**
+   * If this text is stored in an external template (e.g. via `templateUrl`) then we need to decide
+   * whether or not to normalize the line-endings (from `\r\n` to `\n`) when processing ICU
+   * expressions.
+   *
+   * If `true` then we will normalize ICU expression line endings.
+   * The default is `false`, but this will be switched in a future major release.
+   */
+  i18nNormalizeLineEndingsInICUs?: boolean;
+
+  /**
+   * Whether the template was inline.
+   */
+  isInline?: boolean;
 }
 
 /**
@@ -1946,9 +2076,9 @@ export interface ParseTemplateOptions {
  * @param options options to modify how the template is parsed
  */
 export function parseTemplate(
-    template: string, templateUrl: string, options: ParseTemplateOptions = {}):
-    {errors?: ParseError[], nodes: t.Node[], styleUrls: string[], styles: string[]} {
-  const {interpolationConfig, preserveWhitespaces, i18nLegacyMessageIdFormat} = options;
+    template: string, templateUrl: string, options: ParseTemplateOptions = {}): ParsedTemplate {
+  const {interpolationConfig, preserveWhitespaces, enableI18nLegacyMessageIdFormat} = options;
+  const isInline = options.isInline ?? false;
   const bindingParser = makeBindingParser(interpolationConfig);
   const htmlParser = new HtmlParser();
   const parseResult = htmlParser.parse(
@@ -1956,18 +2086,47 @@ export function parseTemplate(
       {leadingTriviaChars: LEADING_TRIVIA_CHARS, ...options, tokenizeExpansionForms: true});
 
   if (parseResult.errors && parseResult.errors.length > 0) {
-    return {errors: parseResult.errors, nodes: [], styleUrls: [], styles: []};
+    // TODO(ayazhafiz): we may not always want to bail out at this point (e.g. in
+    // the context of a language service).
+    return {
+      interpolationConfig,
+      preserveWhitespaces,
+      template,
+      isInline,
+      errors: parseResult.errors,
+      nodes: [],
+      styleUrls: [],
+      styles: [],
+      ngContentSelectors: []
+    };
   }
 
   let rootNodes: html.Node[] = parseResult.rootNodes;
 
   // process i18n meta information (scan attributes, generate ids)
   // before we run whitespace removal process, because existing i18n
-  // extraction process (ng xi18n) relies on a raw content to generate
+  // extraction process (ng extract-i18n) relies on a raw content to generate
   // message ids
   const i18nMetaVisitor = new I18nMetaVisitor(
-      interpolationConfig, /* keepI18nAttrs */ !preserveWhitespaces, i18nLegacyMessageIdFormat);
-  rootNodes = html.visitAll(i18nMetaVisitor, rootNodes);
+      interpolationConfig, /* keepI18nAttrs */ !preserveWhitespaces,
+      enableI18nLegacyMessageIdFormat);
+  const i18nMetaResult = i18nMetaVisitor.visitAllWithErrors(rootNodes);
+
+  if (i18nMetaResult.errors && i18nMetaResult.errors.length > 0) {
+    return {
+      interpolationConfig,
+      preserveWhitespaces,
+      template,
+      isInline,
+      errors: i18nMetaResult.errors,
+      nodes: [],
+      styleUrls: [],
+      styles: [],
+      ngContentSelectors: []
+    };
+  }
+
+  rootNodes = i18nMetaResult.rootNodes;
 
   if (!preserveWhitespaces) {
     rootNodes = html.visitAll(new WhitespaceVisitor(), rootNodes);
@@ -1975,20 +2134,30 @@ export function parseTemplate(
     // run i18n meta visitor again in case whitespaces are removed (because that might affect
     // generated i18n message content) and first pass indicated that i18n content is present in a
     // template. During this pass i18n IDs generated at the first pass will be preserved, so we can
-    // mimic existing extraction process (ng xi18n)
+    // mimic existing extraction process (ng extract-i18n)
     if (i18nMetaVisitor.hasI18nMeta) {
       rootNodes = html.visitAll(
           new I18nMetaVisitor(interpolationConfig, /* keepI18nAttrs */ false), rootNodes);
     }
   }
 
-  const {nodes, errors, styleUrls, styles} = htmlAstToRender3Ast(rootNodes, bindingParser);
-  if (errors && errors.length > 0) {
-    return {errors, nodes: [], styleUrls: [], styles: []};
-  }
+  const {nodes, errors, styleUrls, styles, ngContentSelectors} =
+      htmlAstToRender3Ast(rootNodes, bindingParser);
 
-  return {nodes, styleUrls, styles};
+  return {
+    interpolationConfig,
+    preserveWhitespaces,
+    errors: errors.length > 0 ? errors : null,
+    template,
+    isInline,
+    nodes,
+    styleUrls,
+    styles,
+    ngContentSelectors
+  };
 }
+
+const elementRegistry = new DomElementSchemaRegistry();
 
 /**
  * Construct a `BindingParser` with a default configuration.
@@ -1996,7 +2165,7 @@ export function parseTemplate(
 export function makeBindingParser(
     interpolationConfig: InterpolationConfig = DEFAULT_INTERPOLATION_CONFIG): BindingParser {
   return new BindingParser(
-      new Parser(new Lexer()), interpolationConfig, new DomElementSchemaRegistry(), null, []);
+      new IvyParser(new Lexer()), interpolationConfig, elementRegistry, null, []);
 }
 
 export function resolveSanitizationFn(context: core.SecurityContext, isAttribute?: boolean) {
@@ -2019,6 +2188,23 @@ export function resolveSanitizationFn(context: core.SecurityContext, isAttribute
   }
 }
 
+function trustedConstAttribute(tagName: string, attr: t.TextAttribute): o.Expression {
+  const value = asLiteral(attr.value);
+  if (isTrustedTypesSink(tagName, attr.name)) {
+    switch (elementRegistry.securityContext(tagName, attr.name, /* isAttribute */ true)) {
+      case core.SecurityContext.HTML:
+        return o.importExpr(R3.trustConstantHtml).callFn([value], attr.valueSpan);
+      // NB: no SecurityContext.SCRIPT here, as the corresponding tags are stripped by the compiler.
+      case core.SecurityContext.RESOURCE_URL:
+        return o.importExpr(R3.trustConstantResourceUrl).callFn([value], attr.valueSpan);
+      default:
+        return value;
+    }
+  } else {
+    return value;
+  }
+}
+
 function isSingleElementTemplate(children: t.Node[]): children is[t.Element] {
   return children.length === 1 && children[0] instanceof t.Element;
 }
@@ -2034,7 +2220,7 @@ function hasTextChildrenOnly(children: t.Node[]): boolean {
 interface ChainableBindingInstruction {
   name?: string;
   sourceSpan: ParseSourceSpan|null;
-  value: () => o.Expression;
+  value: () => o.Expression | o.Expression[];
   params?: any[];
 }
 
@@ -2046,7 +2232,7 @@ const NG_I18N_CLOSURE_MODE = 'ngI18nClosureMode';
  *
  * ```
  * var I18N_1;
- * if (ngI18nClosureMode) {
+ * if (typeof ngI18nClosureMode !== undefined && ngI18nClosureMode) {
  *     var MSG_EXTERNAL_XXX = goog.getMsg(
  *          "Some message with {$interpolation}!",
  *          { "interpolation": "\uFFFD0\uFFFD" }
@@ -2074,7 +2260,7 @@ export function getTranslationDeclStmts(
   const statements: o.Statement[] = [
     declareI18nVariable(variable),
     o.ifStmt(
-        o.variable(NG_I18N_CLOSURE_MODE),
+        createClosureModeGuard(),
         createGoogleGetMsgStatements(
             variable, message, closureVar,
             i18nFormatPlaceholderNames(params, /* useCamelCase */ true)),
@@ -2087,4 +2273,77 @@ export function getTranslationDeclStmts(
   }
 
   return statements;
+}
+
+/**
+ * Create the expression that will be used to guard the closure mode block
+ * It is equivalent to:
+ *
+ * ```
+ * typeof ngI18nClosureMode !== undefined && ngI18nClosureMode
+ * ```
+ */
+function createClosureModeGuard(): o.BinaryOperatorExpr {
+  return o.typeofExpr(o.variable(NG_I18N_CLOSURE_MODE))
+      .notIdentical(o.literal('undefined', o.STRING_TYPE))
+      .and(o.variable(NG_I18N_CLOSURE_MODE));
+}
+
+/**
+ * Information about the template which was extracted during parsing.
+ *
+ * This contains the actual parsed template as well as any metadata collected during its parsing,
+ * some of which might be useful for re-parsing the template with different options.
+ */
+export interface ParsedTemplate {
+  /**
+   * Include whitespace nodes in the parsed output.
+   */
+  preserveWhitespaces?: boolean;
+
+  /**
+   * How to parse interpolation markers.
+   */
+  interpolationConfig?: InterpolationConfig;
+
+  /**
+   * The string contents of the template, or an expression that represents the string/template
+   * literal as it occurs in the source.
+   *
+   * This is the "logical" template string, after expansion of any escaped characters (for inline
+   * templates). This may differ from the actual template bytes as they appear in the .ts file.
+   */
+  template: string|o.Expression;
+
+  /**
+   * Whether the template was inline (using `template`) or external (using `templateUrl`).
+   */
+  isInline: boolean;
+
+  /**
+   * Any errors from parsing the template the first time.
+   *
+   * `null` if there are no errors. Otherwise, the array of errors is guaranteed to be non-empty.
+   */
+  errors: ParseError[]|null;
+
+  /**
+   * The template AST, parsed from the template.
+   */
+  nodes: t.Node[];
+
+  /**
+   * Any styleUrls extracted from the metadata.
+   */
+  styleUrls: string[];
+
+  /**
+   * Any inline styles extracted from the metadata.
+   */
+  styles: string[];
+
+  /**
+   * Any ng-content selectors extracted from the template.
+   */
+  ngContentSelectors: string[];
 }

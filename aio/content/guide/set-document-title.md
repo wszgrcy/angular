@@ -1,6 +1,6 @@
 {@a top}
 
-# Set the Document Title
+# Set the document title
 
 Your app should be able to make the browser title bar say whatever you want it to say.
 This cookbook explains how to do it.
@@ -47,11 +47,9 @@ You can inject the `Title` service into the root `AppComponent` and expose a bin
 
 Bind that method to three anchor tags and voilà!
 
-<figure class="lightbox">
-  <div class="card">
-    <img src="generated/images/guide/set-document-title/set-title-anim.gif" alt="Set title">
-  </div>
-</figure>
+<div class="lightbox">
+  <img src="generated/images/guide/set-document-title/set-title-anim.gif" alt="Set title">
+</div>
 
 Here's the complete solution:
 

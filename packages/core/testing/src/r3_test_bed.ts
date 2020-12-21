@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright Google Inc. All Rights Reserved.
+ * Copyright Google LLC All Rights Reserved.
  *
  * Use of this source code is governed by an MIT-style license that can be
  * found in the LICENSE file at https://angular.io/license
@@ -9,7 +9,8 @@
 // The formatter and CI disagree on how this import statement should be formatted. Both try to keep
 // it on one line, too, which has gotten very hard to read & manage. So disable the formatter for
 // this statement only.
-// clang-format off
+
+/* clang-format off */
 import {
   AbstractType,
   Component,
@@ -22,20 +23,20 @@ import {
   Pipe,
   PlatformRef,
   Type,
+  ɵflushModuleScopingQueueAsMuchAsPossible as flushModuleScopingQueueAsMuchAsPossible,
   ɵRender3ComponentFactory as ComponentFactory,
   ɵRender3NgModuleRef as NgModuleRef,
-  ɵflushModuleScopingQueueAsMuchAsPossible as flushModuleScopingQueueAsMuchAsPossible,
   ɵresetCompiledComponents as resetCompiledComponents,
   ɵstringify as stringify,
 } from '@angular/core';
-// clang-format on
+
+/* clang-format on */
 
 import {ComponentFixture} from './component_fixture';
 import {MetadataOverride} from './metadata_override';
+import {R3TestBedCompiler} from './r3_test_bed_compiler';
 import {TestBed} from './test_bed';
 import {ComponentFixtureAutoDetect, ComponentFixtureNoNgZone, TestBedStatic, TestComponentRenderer, TestModuleMetadata} from './test_bed_common';
-import {R3TestBedCompiler} from './r3_test_bed_compiler';
-import {clearRegisteredModuleState} from '../../src/linker/ng_module_factory_registration';
 
 let _nextRootElementId = 0;
 
@@ -76,7 +77,9 @@ export class TestBedRender3 implements TestBed {
    *
    * @publicApi
    */
-  static resetTestEnvironment(): void { _getTestBedRender3().resetTestEnvironment(); }
+  static resetTestEnvironment(): void {
+    _getTestBedRender3().resetTestEnvironment();
+  }
 
   static configureCompiler(config: {providers?: any[]; useJit?: boolean;}): TestBedStatic {
     _getTestBedRender3().configureCompiler(config);
@@ -97,7 +100,9 @@ export class TestBedRender3 implements TestBed {
    * It is necessary to call this function
    * as fetching urls is asynchronous.
    */
-  static compileComponents(): Promise<any> { return _getTestBedRender3().compileComponents(); }
+  static compileComponents(): Promise<any> {
+    return _getTestBedRender3().compileComponents();
+  }
 
   static overrideModule(ngModule: Type<any>, override: MetadataOverride<NgModule>): TestBedStatic {
     _getTestBedRender3().overrideModule(ngModule, override);
@@ -122,7 +127,7 @@ export class TestBedRender3 implements TestBed {
   }
 
   static overrideTemplate(component: Type<any>, template: string): TestBedStatic {
-    _getTestBedRender3().overrideComponent(component, {set: {template, templateUrl: null !}});
+    _getTestBedRender3().overrideComponent(component, {set: {template, templateUrl: null!}});
     return TestBedRender3 as any as TestBedStatic;
   }
 
@@ -184,8 +189,8 @@ export class TestBedRender3 implements TestBed {
 
   // Properties
 
-  platform: PlatformRef = null !;
-  ngModule: Type<any>|Type<any>[] = null !;
+  platform: PlatformRef = null!;
+  ngModule: Type<any>|Type<any>[] = null!;
 
   private _compiler: R3TestBedCompiler|null = null;
   private _testModuleRef: NgModuleRef<any>|null = null;
@@ -224,8 +229,8 @@ export class TestBedRender3 implements TestBed {
   resetTestEnvironment(): void {
     this.resetTestingModule();
     this._compiler = null;
-    this.platform = null !;
-    this.ngModule = null !;
+    this.platform = null!;
+    this.ngModule = null!;
   }
 
   resetTestingModule(): void {
@@ -254,7 +259,9 @@ export class TestBedRender3 implements TestBed {
     this.compiler.configureTestingModule(moduleDef);
   }
 
-  compileComponents(): Promise<any> { return this.compiler.compileComponents(); }
+  compileComponents(): Promise<any> {
+    return this.compiler.compileComponents();
+  }
 
   inject<T>(
       token: Type<T>|InjectionToken<T>|AbstractType<T>, notFoundValue?: T, flags?: InjectFlags): T;
@@ -320,12 +327,13 @@ export class TestBedRender3 implements TestBed {
    */
   overrideProvider(token: any, provider: {useFactory?: Function, useValue?: any, deps?: any[]}):
       void {
+    this.assertNotInstantiated('overrideProvider', 'override provider');
     this.compiler.overrideProvider(token, provider);
   }
 
   createComponent<T>(type: Type<T>): ComponentFixture<T> {
     const testComponentRenderer = this.inject(TestComponentRenderer);
-    const rootElId = `root-ng-internal-isolated-${_nextRootElementId++}`;
+    const rootElId = `root${_nextRootElementId++}`;
     testComponentRenderer.insertRootElement(rootElId);
 
     const componentDef = (type as any).ɵcmp;
@@ -352,6 +360,10 @@ export class TestBedRender3 implements TestBed {
     return fixture;
   }
 
+  /**
+   * @internal strip this from published d.ts files due to
+   * https://github.com/microsoft/TypeScript/issues/36216
+   */
   private get compiler(): R3TestBedCompiler {
     if (this._compiler === null) {
       throw new Error(`Need to call TestBed.initTestEnvironment() first`);
@@ -359,6 +371,10 @@ export class TestBedRender3 implements TestBed {
     return this._compiler;
   }
 
+  /**
+   * @internal strip this from published d.ts files due to
+   * https://github.com/microsoft/TypeScript/issues/36216
+   */
   private get testModuleRef(): NgModuleRef<any> {
     if (this._testModuleRef === null) {
       this._testModuleRef = this.compiler.finalize();

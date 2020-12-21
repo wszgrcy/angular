@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright Google Inc. All Rights Reserved.
+ * Copyright Google LLC All Rights Reserved.
  *
  * Use of this source code is governed by an MIT-style license that can be
  * found in the LICENSE file at https://angular.io/license
@@ -11,27 +11,16 @@ import * as tss from 'typescript/lib/tsserverlibrary';
 import {createLanguageService} from './language_service';
 import {TypeScriptServiceHost} from './typescript_host';
 
-/**
- * A note about importing TypeScript module.
- * The TypeScript module is supplied by tsserver at runtime to ensure version
- * compatibility. In Angular language service, the rollup output is augmented
- * with a "banner" shim that overwrites 'typescript' and
- * 'typescript/lib/tsserverlibrary' imports with the value supplied by tsserver.
- * This means import of either modules will not be "required", but they'll work
- * just like regular imports.
- */
-
-const projectHostMap = new WeakMap<tss.server.Project, TypeScriptServiceHost>();
+// Use a WeakMap to keep track of Project to Host mapping so that when Project
+// is deleted Host could be garbage collected.
+const PROJECT_MAP = new WeakMap<tss.server.Project, TypeScriptServiceHost>();
 
 /**
- * Return the external templates discovered through processing all NgModules in
- * the specified `project`.
- * This function is called in a few situations:
- * 1. When a ConfiguredProject is created
- *    https://github.com/microsoft/TypeScript/blob/c26c44d5fceb04ea14da20b6ed23449df777ff34/src/server/editorServices.ts#L1755
- * 2. When updateGraph() is called on a Project
- *    https://github.com/microsoft/TypeScript/blob/c26c44d5fceb04ea14da20b6ed23449df777ff34/src/server/project.ts#L915
- * @param project Most likely a ConfiguredProject
+ * This function is called by tsserver to retrieve the external (non-TS) files
+ * that should belong to the specified `project`. For Angular, these files are
+ * external templates. This is called once when the project is loaded, then
+ * every time when the program is updated.
+ * @param project Project for which external files should be retrieved.
  */
 export function getExternalFiles(project: tss.server.Project): string[] {
   if (!project.hasRoots()) {
@@ -39,23 +28,21 @@ export function getExternalFiles(project: tss.server.Project): string[] {
     // not do any work.
     return [];
   }
-  const ngLSHost = projectHostMap.get(project);
-  if (!ngLSHost) {
-    // Without an Angular host there is no way to get template references.
+  const ngLsHost = PROJECT_MAP.get(project);
+  if (ngLsHost === undefined) {
     return [];
   }
-  ngLSHost.getAnalyzedModules();
-  const templates = ngLSHost.getTemplateReferences();
-  const logger = project.projectService.logger;
-  if (logger.hasLevel(tss.server.LogLevel.verbose)) {
-    // Log external files to help debugging.
-    logger.info(`External files in ${project.projectName}: ${JSON.stringify(templates)}`);
-  }
-  return templates;
+  ngLsHost.getAnalyzedModules();
+  return ngLsHost.getExternalTemplates().filter(fileName => {
+    // TODO(kyliau): Remove this when the following PR lands on the version of
+    // TypeScript used in this repo.
+    // https://github.com/microsoft/TypeScript/pull/41737
+    return project.fileExists(fileName);
+  });
 }
 
 export function create(info: tss.server.PluginCreateInfo): tss.LanguageService {
-  const {project, languageService: tsLS, languageServiceHost: tsLSHost, config} = info;
+  const {languageService: tsLS, languageServiceHost: tsLSHost, config, project} = info;
   // This plugin could operate under two different modes:
   // 1. TS + Angular
   //    Plugin augments TS language service to provide additional Angular
@@ -68,11 +55,10 @@ export function create(info: tss.server.PluginCreateInfo): tss.LanguageService {
   const angularOnly = config ? config.angularOnly === true : false;
   const ngLSHost = new TypeScriptServiceHost(tsLSHost, tsLS);
   const ngLS = createLanguageService(ngLSHost);
-  projectHostMap.set(project, ngLSHost);
+  PROJECT_MAP.set(project, ngLSHost);
 
   function getCompletionsAtPosition(
-      fileName: string, position: number,
-      options: tss.GetCompletionsAtPositionOptions | undefined) {
+      fileName: string, position: number, options: tss.GetCompletionsAtPositionOptions|undefined) {
     if (!angularOnly) {
       const results = tsLS.getCompletionsAtPosition(fileName, position, options);
       if (results && results.entries.length) {
@@ -80,7 +66,7 @@ export function create(info: tss.server.PluginCreateInfo): tss.LanguageService {
         return results;
       }
     }
-    return ngLS.getCompletionsAt(fileName, position);
+    return ngLS.getCompletionsAtPosition(fileName, position, options);
   }
 
   function getQuickInfoAtPosition(fileName: string, position: number): tss.QuickInfo|undefined {
@@ -91,7 +77,7 @@ export function create(info: tss.server.PluginCreateInfo): tss.LanguageService {
         return result;
       }
     }
-    return ngLS.getHoverAt(fileName, position);
+    return ngLS.getQuickInfoAtPosition(fileName, position);
   }
 
   function getSemanticDiagnostics(fileName: string): tss.Diagnostic[] {
@@ -100,7 +86,7 @@ export function create(info: tss.server.PluginCreateInfo): tss.LanguageService {
       results.push(...tsLS.getSemanticDiagnostics(fileName));
     }
     // For semantic diagnostics we need to combine both TS + Angular results
-    results.push(...ngLS.getDiagnostics(fileName));
+    results.push(...ngLS.getSemanticDiagnostics(fileName));
     return results;
   }
 
@@ -113,7 +99,7 @@ export function create(info: tss.server.PluginCreateInfo): tss.LanguageService {
         return results;
       }
     }
-    const result = ngLS.getDefinitionAt(fileName, position);
+    const result = ngLS.getDefinitionAndBoundSpan(fileName, position);
     if (!result || !result.definitions || !result.definitions.length) {
       return;
     }
@@ -129,16 +115,37 @@ export function create(info: tss.server.PluginCreateInfo): tss.LanguageService {
         return result;
       }
     }
-    return ngLS.getDefinitionAt(fileName, position);
+    return ngLS.getDefinitionAndBoundSpan(fileName, position);
   }
 
-  const proxy: tss.LanguageService = Object.assign(
-      // First clone the original TS language service
-      {}, tsLS,
-      // Then override the methods supported by Angular language service
-      {
-          getCompletionsAtPosition, getQuickInfoAtPosition, getSemanticDiagnostics,
-          getDefinitionAtPosition, getDefinitionAndBoundSpan,
-      });
-  return proxy;
+  function getTypeDefinitionAtPosition(fileName: string, position: number) {
+    // Not implemented in VE Language Service
+    return undefined;
+  }
+
+  function getReferencesAtPosition(fileName: string, position: number) {
+    // Not implemented in VE Language Service
+    return undefined;
+  }
+
+  function findRenameLocations(
+      fileName: string, position: number, findInStrings: boolean, findInComments: boolean,
+      providePrefixAndSuffixTextForRename?: boolean): readonly ts.RenameLocation[]|undefined {
+    // not implemented in VE Language Service
+    return undefined;
+  }
+
+  return {
+    // First clone the original TS language service
+    ...tsLS,
+    // Then override the methods supported by Angular language service
+    getCompletionsAtPosition,
+    getQuickInfoAtPosition,
+    getSemanticDiagnostics,
+    getDefinitionAtPosition,
+    getDefinitionAndBoundSpan,
+    getTypeDefinitionAtPosition,
+    getReferencesAtPosition,
+    findRenameLocations,
+  };
 }
